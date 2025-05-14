@@ -9,7 +9,7 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-// Create Supabase client with proper authentication configuration
+// Create Supabase client with improved configuration
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
   SUPABASE_PUBLISHABLE_KEY,
@@ -17,119 +17,21 @@ export const supabase = createClient<Database>(
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      storage: typeof window !== 'undefined' ? localStorage : undefined,
-      detectSessionInUrl: true
+      detectSessionInUrl: true,
+      storage: typeof window !== 'undefined' ? localStorage : undefined
     },
     global: {
       headers: {
-        'apikey': SUPABASE_PUBLISHABLE_KEY,
-        'Content-Type': 'application/json'
+        'X-Client-Info': 'lovable-app',
       },
-      // Custom fetch handler with improved logging and retry logic
-      fetch: (url, options = {}) => {
-        // Ensure headers are properly passed and structured
-        const fetchOptions = {
-          ...options,
-          headers: {
-            ...((options as any)?.headers || {}),
-            'apikey': SUPABASE_PUBLISHABLE_KEY,
-            'Content-Type': 'application/json'
-          }
-        };
-        
-        // Log fetch details for debugging
-        console.log('Supabase fetch URL:', url);
-        console.log('Fetch options:', JSON.stringify({
-          ...fetchOptions,
-          headers: {
-            ...((fetchOptions as any).headers || {}),
-            // Mask sensitive data in logs
-            Authorization: (fetchOptions as any).headers?.Authorization ? 'Bearer token present' : 'No auth token'
-          }
-        }, null, 2));
-        
-        // Implement retry logic for network issues
-        let retries = 0;
-        const maxRetries = 3;
-        const baseDelay = 500;
-        
-        const executeFetch = async (): Promise<Response> => {
-          try {
-            // Add session token to request if available but not already present
-            if (typeof localStorage !== 'undefined' && !(fetchOptions as any)?.headers?.Authorization) {
-              try {
-                const session = JSON.parse(localStorage.getItem('supabase.auth.token') || '{}');
-                if (session?.access_token) {
-                  (fetchOptions as any).headers.Authorization = `Bearer ${session.access_token}`;
-                  console.log('Added auth token to request from localStorage');
-                }
-              } catch (err) {
-                console.warn('Failed to get session from localStorage:', err);
-              }
-            }
-            
-            const response = await fetch(url, fetchOptions);
-            
-            // Log response status and details for debugging
-            console.log(`Response status for ${url}: ${response.status}`);
-            if (response.status >= 400) {
-              try {
-                const errorText = await response.clone().text();
-                console.error(`Error response for ${url}:`, response.statusText, errorText);
-              } catch (error) {
-                console.error(`Error capturing error details for ${url}:`, error);
-              }
-            }
-            return response;
-          } catch (error) {
-            console.error(`Fetch error for ${url}:`, error);
-            if (retries < maxRetries) {
-              retries++;
-              const delay = baseDelay * Math.pow(2, retries - 1); // Exponential backoff
-              console.log(`Retrying in ${delay}ms (attempt ${retries} of ${maxRetries})...`);
-              await new Promise(resolve => setTimeout(resolve, delay));
-              return executeFetch();
-            }
-            throw error;
-          }
-        };
-        
-        return executeFetch();
-      }
     }
   }
 );
 
-// More robust session validation that doesn't throw errors
+// Simple function to validate if user has an active session
 export const hasValidSession = async (): Promise<boolean> => {
   try {
-    // First check localStorage for a token to avoid unnecessary network requests
-    if (typeof localStorage !== 'undefined') {
-      try {
-        const sessionStr = localStorage.getItem('supabase.auth.token');
-        if (!sessionStr) {
-          console.log("No session found in localStorage");
-          return false;
-        }
-        
-        const sessionData = JSON.parse(sessionStr);
-        if (!sessionData?.access_token) {
-          console.log("No access token in localStorage session");
-          return false;
-        }
-        
-        // Check if token is expired
-        const expiresAt = sessionData?.expires_at;
-        if (expiresAt && expiresAt < Math.floor(Date.now() / 1000)) {
-          console.log("Session token is expired");
-          return false;
-        }
-      } catch (e) {
-        console.warn("Error checking localStorage session:", e);
-      }
-    }
-    
-    // Double-check with the server
+    console.log("Checking for valid session...");
     const { data, error } = await supabase.auth.getSession();
     
     if (error) {
@@ -139,6 +41,21 @@ export const hasValidSession = async (): Promise<boolean> => {
     
     const isValid = !!data.session?.user && !!data.session?.access_token;
     console.log("Session validation result:", isValid ? "Valid session" : "No valid session");
+    
+    // If we have a session, log some details about it
+    if (isValid && data.session) {
+      const expiresAt = data.session.expires_at 
+        ? new Date(data.session.expires_at * 1000).toISOString() 
+        : 'unknown';
+        
+      console.log("Session details:", {
+        user_id: data.session.user.id,
+        email: data.session.user.email,
+        expires_at: expiresAt,
+        current_time: new Date().toISOString()
+      });
+    }
+    
     return isValid;
   } catch (e) {
     console.error("Failed to validate session:", e);
@@ -149,6 +66,7 @@ export const hasValidSession = async (): Promise<boolean> => {
 // Enhanced logging of authentication state
 export const logAuthState = async () => {
   try {
+    console.log("Checking authentication state...");
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session) {
@@ -167,7 +85,7 @@ export const logAuthState = async () => {
         current_time: new Date().toISOString()
       });
       
-      // Verify token is in localStorage
+      // Check token in localStorage
       if (typeof localStorage !== 'undefined') {
         try {
           const localSession = localStorage.getItem('supabase.auth.token');
@@ -184,6 +102,40 @@ export const logAuthState = async () => {
     }
   } catch (e) {
     console.error("Failed to log auth state:", e);
+    return false;
+  }
+};
+
+// Function to get current user - useful for debugging
+export const getCurrentUser = async () => {
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error) {
+      console.error("Error getting current user:", error);
+      return null;
+    }
+    return user;
+  } catch (e) {
+    console.error("Exception getting current user:", e);
+    return null;
+  }
+};
+
+// Function to manually refresh the session token
+export const refreshSession = async () => {
+  try {
+    console.log("Attempting to refresh session...");
+    const { data, error } = await supabase.auth.refreshSession();
+    
+    if (error) {
+      console.error("Error refreshing session:", error);
+      return false;
+    }
+    
+    console.log("Session refresh successful:", !!data.session);
+    return !!data.session;
+  } catch (e) {
+    console.error("Exception refreshing session:", e);
     return false;
   }
 };

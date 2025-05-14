@@ -14,12 +14,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { generateQRCode } from '@/lib/utils';
-import { Users, UserPlus, Search, QrCode } from 'lucide-react';
+import { Users, UserPlus, Search, QrCode, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, hasValidSession, logAuthState } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/auth/use-auth';
-import { getGymIdByEmail } from '@/hooks/auth/gym-service';
+import { getGymIdByEmail, testDatabaseAccess } from '@/hooks/auth/gym-service';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,17 +40,50 @@ const MembersPage: React.FC = () => {
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [isErrorDialogOpen, setIsErrorDialogOpen] = useState(false);
   const [gymId, setGymId] = useState<string | null>(null);
+  const [authStatus, setAuthStatus] = useState<string>("checking");
+  const [dbAccessStatus, setDbAccessStatus] = useState<string>("unknown");
   const navigate = useNavigate();
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  
+  // Check authentication and database access on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        if (!user?.email) {
+          console.log("No user email found");
+          setAuthStatus("no_user");
+          return;
+        }
+        
+        const isValid = await hasValidSession();
+        setAuthStatus(isValid ? "authenticated" : "not_authenticated");
+        
+        if (isValid) {
+          await logAuthState();
+          const dbAccessOk = await testDatabaseAccess();
+          setDbAccessStatus(dbAccessOk ? "access_ok" : "access_denied");
+        }
+      } catch (err) {
+        console.error("Error checking auth status:", err);
+        setAuthStatus("error");
+      }
+    };
+    
+    checkAuth();
+  }, [user?.email]);
 
   // Fetch gym ID on component mount
   useEffect(() => {
     const fetchGymId = async () => {
-      if (!user?.email) return;
+      if (!user?.email) {
+        console.log("No user email found, cannot fetch gym ID");
+        return;
+      }
       
       try {
+        console.log("Fetching gym ID for user:", user.email);
         const id = await getGymIdByEmail(user.email);
         console.log("Fetched gym ID:", id);
         setGymId(id);
@@ -62,7 +95,7 @@ const MembersPage: React.FC = () => {
     fetchGymId();
   }, [user?.email]);
 
-  // Fetch members using react-query with better error handling and offline support
+  // Fetch members using react-query
   const { data: members, isLoading, isError, error } = useQuery({
     queryKey: ['members', gymId],
     queryFn: async () => {
@@ -72,12 +105,18 @@ const MembersPage: React.FC = () => {
       }
 
       console.log("Fetching members for gym ID:", gymId);
+      
+      // Verify authentication status
+      const isAuthenticated = await hasValidSession();
+      if (!isAuthenticated) {
+        console.error("No valid session for fetching members");
+        throw new Error("Authentication required to fetch members");
+      }
+      
       try {
-        // Log supabase client state for debugging
-        console.log("Supabase client state:", {
-          authHeaders: session ? "Auth headers present" : "No auth headers",
-          userSession: session ? "Session exists" : "No session"
-        });
+        // Log authentication state
+        await logAuthState();
+        console.log("Session state when fetching members:", !!session);
         
         const { data, error } = await supabase
           .from('members')
@@ -89,23 +128,23 @@ const MembersPage: React.FC = () => {
           throw new Error(error.message);
         }
         
-        console.log("Members data:", data);
+        console.log(`Successfully fetched ${data?.length || 0} members`);
         return data || [];
       } catch (fetchError) {
         console.error("Failed to fetch members:", fetchError);
-        // Return empty array instead of throwing to prevent UI from breaking
-        return [];
+        throw fetchError;
       }
     },
-    enabled: !!gymId,
-    retry: 1,
+    enabled: !!gymId && authStatus === "authenticated",
+    retry: 2,
     staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 10, // 10 minutes
   });
 
   // Mutation for adding a new member with improved error handling
   const addMemberMutation = useMutation({
     mutationFn: async (newMemberName: string) => {
+      console.log("Starting member creation process");
+      
       if (!user?.email) {
         throw new Error("You must be logged in to add members");
       }
@@ -113,66 +152,69 @@ const MembersPage: React.FC = () => {
       if (!gymId) {
         throw new Error("No gym ID found. Please make sure your gym is set up correctly");
       }
-
-      console.log("Adding member with name:", newMemberName, "to gym ID:", gymId);
-      console.log("Session state:", session ? "Valid session" : "No session");
       
-      try {
-        // Generate a random QR code for the member
-        const baseUrl = window.location.origin;
-        const tempId = Math.random().toString(36).substring(2, 15);
-        const memberUrl = `${baseUrl}/members/${tempId}`;
-        
-        console.log("Generating QR code for URL:", memberUrl);
-        const qrCodeDataUrl = await generateQRCode(memberUrl);
-        
-        const newMember = {
-          first_name: newMemberName,
-          last_name: '',
-          email: '',
-          gym_id: gymId,
-          qr_code: qrCodeDataUrl || ''
-        };
-        
-        console.log("Submitting new member to Supabase:", newMember);
-        console.log("Auth state:", { 
-          session: session ? "Present" : "Missing",
-          accessToken: session?.access_token ? "Present" : "Missing"
+      // Verify authentication status
+      const isAuthenticated = await hasValidSession();
+      if (!isAuthenticated) {
+        throw new Error("Authentication required to add members");
+      }
+      
+      console.log("Adding member with name:", newMemberName, "to gym ID:", gymId);
+      console.log("Authentication state:", {
+        user_id: user.id,
+        email: user.email,
+        session_exists: !!session
+      });
+      
+      // Log auth state for debugging
+      await logAuthState();
+      
+      // Generate a random QR code for the member
+      const baseUrl = window.location.origin;
+      const tempId = Math.random().toString(36).substring(2, 15);
+      const memberUrl = `${baseUrl}/members/${tempId}`;
+      
+      console.log("Generating QR code for URL:", memberUrl);
+      const qrCodeDataUrl = await generateQRCode(memberUrl);
+      
+      // Create new member object
+      const newMember = {
+        first_name: newMemberName,
+        last_name: '',
+        email: '',
+        gym_id: gymId,
+        qr_code: qrCodeDataUrl || ''
+      };
+      
+      console.log("Submitting new member to database:", {
+        first_name: newMember.first_name,
+        gym_id: newMember.gym_id
+      });
+      
+      // Insert member into database
+      const { data, error } = await supabase
+        .from('members')
+        .insert([newMember])
+        .select();
+
+      if (error) {
+        // Log detailed error information
+        console.error("Error adding member:", {
+          error_message: error.message,
+          error_details: error.details,
+          error_hint: error.hint,
+          error_code: error.code
         });
         
-        // Create fetch options with explicit headers
-        const { data, error, status, statusText } = await supabase
-          .from('members')
-          .insert([newMember])
-          .select();
-
-        if (error) {
-          // Log detailed error information
-          console.error("Error adding member:", {
-            error,
-            status,
-            statusText,
-            details: error.details,
-            hint: error.hint,
-            code: error.code
-          });
-          
-          // Create detailed error message for debugging
-          const errorMsg = `Error: ${error.message}\nStatus: ${status}\nCode: ${error.code}\nHint: ${error.hint || 'None'}\nDetails: ${error.details || 'None'}`;
-          setErrorDetails(errorMsg);
-          
-          throw new Error(error.message);
-        }
-        
-        console.log("Member added successfully:", data);
-        return data;
-      } catch (err: any) {
-        // Capture network errors
-        console.error("Exception in mutation:", err);
-        const errorMsg = `Error: ${err.message}\n${err.stack ? `Stack: ${err.stack}` : ''}`;
+        // Create detailed error message
+        const errorMsg = `Error: ${error.message}\nCode: ${error.code}\nHint: ${error.hint || 'None'}\nDetails: ${error.details || 'None'}`;
         setErrorDetails(errorMsg);
-        throw err;
+        
+        throw new Error(error.message);
       }
+      
+      console.log("Member added successfully:", data);
+      return data;
     },
     onSuccess: () => {
       // Invalidate and refetch members
@@ -250,6 +292,20 @@ const MembersPage: React.FC = () => {
     setIsErrorDialogOpen(false);
     setErrorDetails(null);
   };
+  
+  // Handle authentication issues
+  if (authStatus === "no_user" || authStatus === "not_authenticated") {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center h-64">
+        <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
+        <h2 className="text-xl font-bold mb-2">Authentication Required</h2>
+        <p className="mb-4 text-center">You need to be logged in to access this page.</p>
+        <Button onClick={() => navigate('/login')}>
+          Go to Login
+        </Button>
+      </div>
+    );
+  }
 
   // Loading state when waiting for gym ID
   if (!gymId && user?.email) {
@@ -268,6 +324,25 @@ const MembersPage: React.FC = () => {
       <span className="ml-3 text-gray-600">Loading members...</span>
     </div>
   );
+
+  // Display database access issues
+  if (dbAccessStatus === "access_denied") {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center h-64">
+        <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
+        <h2 className="text-xl font-bold mb-2">Database Access Issue</h2>
+        <p className="mb-4 text-center">Unable to access the database. This may be due to permissions issues.</p>
+        <div className="flex space-x-4">
+          <Button onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </Button>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (isError) {
     console.error("Error details:", error);

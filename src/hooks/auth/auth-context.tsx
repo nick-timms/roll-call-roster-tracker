@@ -1,7 +1,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase, logAuthState } from '@/integrations/supabase/client';
+import { supabase, logAuthState, refreshSession } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
 import { useToast } from "@/hooks/use-toast";
 import { AuthContextType } from './types';
@@ -17,13 +17,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Refresh the session every 10 minutes to ensure the token stays valid
+  useEffect(() => {
+    if (!session) return;
+    
+    const refreshTimer = setInterval(async () => {
+      console.log("Scheduled token refresh attempt");
+      await refreshSession();
+    }, 10 * 60 * 1000); // 10 minutes
+    
+    return () => clearInterval(refreshTimer);
+  }, [session]);
+
   useEffect(() => {
     console.log("AuthProvider initializing...");
     
     // Set up auth state listener first to catch all auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
-        console.log("Auth state change event:", event);
+      async (event, newSession) => {
+        console.log(`Auth state change event: ${event}`);
         
         // Update session and user state
         setSession(newSession);
@@ -36,19 +48,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             description: "Welcome to MatTrack",
           });
           
-          // Don't call Supabase directly in the auth callback to avoid deadlocks
-          // Use setTimeout to handle after auth changes are processed
-          setTimeout(() => {
-            console.log("Checking gym after sign in");
-            logAuthState(); // Log auth state for debugging
-            
-            // Don't block on this
+          console.log("User signed in:", newSession?.user?.email);
+          
+          // Use setTimeout to avoid auth deadlocks
+          setTimeout(async () => {
             if (newSession?.user?.email) {
-              ensureGymExists(newSession.user.email).catch(err => {
-                console.warn("Could not ensure gym exists during sign in event:", err);
-              });
+              try {
+                const gym = await ensureGymExists(newSession.user.email);
+                console.log("Gym check complete:", gym ? "Gym exists/created" : "No gym found");
+              } catch (err) {
+                console.warn("Could not ensure gym exists:", err);
+              }
             }
-          }, 0);
+          }, 100);
         } else if (event === 'SIGNED_OUT') {
           toast({
             title: "Signed out successfully",
@@ -65,7 +77,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
           }
         } else if (event === 'TOKEN_REFRESHED') {
-          console.log("Auth token refreshed");
+          console.log("Auth token refreshed successfully");
         }
       }
     );
@@ -82,21 +94,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setUser(null);
         } else {
           console.log("Session check result:", existingSession ? "Session found" : "No session found");
-          setSession(existingSession);
-          setUser(existingSession?.user ?? null);
           
           if (existingSession) {
+            setSession(existingSession);
+            setUser(existingSession.user);
+            
             console.log("Existing session found for user:", existingSession.user.email);
+            
             // Don't block UI rendering on this
-            setTimeout(() => {
+            setTimeout(async () => {
               if (existingSession.user.email) {
-                ensureGymExists(existingSession.user.email).catch(err => {
+                try {
+                  await ensureGymExists(existingSession.user.email);
+                } catch (err) {
                   console.warn("Could not ensure gym exists during initial session check:", err);
-                });
+                }
               }
-            }, 0);
+            }, 100);
           } else {
             console.log("No existing session found");
+            setSession(null);
+            setUser(null);
           }
         }
       } catch (error) {
@@ -123,6 +141,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(true);
       console.log("Starting signup process for:", email, "with gym name:", gymName);
       
+      // Clear any existing session first
+      await supabase.auth.signOut();
+      
       const { error, data } = await supabase.auth.signUp({
         email,
         password,
@@ -138,14 +159,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Check your email for a confirmation link",
       });
 
+      // Log the current session
+      await logAuthState();
+
       // After successful signup, create the gym
       if (data.user) {
         console.log("User created with ID:", data.user.id, "now creating gym");
+        
+        // Set the session to ensure gym creation has auth context
+        setSession(data.session);
+        setUser(data.user);
+        
         try {
           await createDefaultGym(email, gymName);
         } catch (gymError) {
           console.error("Gym creation failed:", gymError);
-          // Don't fail the signup process if gym creation fails
           toast({
             title: "Note",
             description: "Account created but gym setup encountered an issue. Please try setting up your gym in settings later.",
@@ -154,7 +182,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       // Auto sign in for better user experience
-      if (data.user) {
+      if (data.user && !data.session) {
         try {
           await signIn(email, password);
         } catch (signInError: any) {
@@ -165,6 +193,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           });
           navigate('/login', { replace: true });
         }
+      } else if (data.session) {
+        // We already have a session from signup
+        navigate('/dashboard', { replace: true });
       }
     } catch (error: any) {
       toast({
@@ -183,6 +214,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(true);
       console.log("Signing in user:", email);
       
+      // Clear any existing session first to avoid conflicts
+      await supabase.auth.signOut();
+      
       const { error, data } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -192,6 +226,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       // Only redirect if the sign-in was successful
       if (data.session) {
+        console.log("Sign in successful, session obtained");
+        
+        // Update our state
+        setSession(data.session);
+        setUser(data.user);
+        
         // Log auth state for debugging
         await logAuthState();
         
