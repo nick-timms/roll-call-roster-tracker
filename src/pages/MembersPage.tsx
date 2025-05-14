@@ -34,12 +34,17 @@ const MembersPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Fetch members using react-query
-  const { data: members, isLoading, isError } = useQuery({
+  // Fetch members using react-query with better error handling
+  const { data: members, isLoading, isError, error } = useQuery({
     queryKey: ['members'],
     queryFn: async () => {
-      if (!user?.email) return [];
+      if (!user?.email) {
+        console.log("No user email, creating default gym");
+        await createDefaultGym();
+        return [];
+      }
 
+      console.log("Fetching members for gym:", user.email);
       const { data, error } = await supabase
         .from('members')
         .select('*')
@@ -50,35 +55,49 @@ const MembersPage: React.FC = () => {
         throw new Error(error.message);
       }
       return data || [];
-    }
+    },
+    retry: 1,
+    retryDelay: 1000,
   });
 
-  useEffect(() => {
-    if (!user?.email) {
-      console.log("User email not found, creating default gym");
-      createDefaultGym();
-    }
-  }, [user]);
-
-  // Mutation for adding a new member
+  // Mutation for adding a new member with improved error handling
   const addMemberMutation = useMutation({
     mutationFn: async (newMemberName: string) => {
-      if (!user?.email) throw new Error("User email not found");
+      if (!user?.email) {
+        console.log("No user email found, attempting to create default gym");
+        await createDefaultGym();
+        throw new Error("No user email available");
+      }
 
+      console.log("Adding member with name:", newMemberName, "to gym:", user.email);
+      
+      // Generate a random QR code for the member
+      const baseUrl = window.location.origin;
+      const tempId = Math.random().toString(36).substring(2, 15);
+      const memberUrl = `${baseUrl}/members/${tempId}`;
+      const qrCodeDataUrl = await generateQRCode(memberUrl);
+      
+      const newMember = {
+        first_name: newMemberName,
+        last_name: '',
+        email: '',
+        gym_id: user.email,
+        qr_code: qrCodeDataUrl || ''
+      };
+      
+      console.log("Submitting new member to Supabase:", newMember);
+      
       const { data, error } = await supabase
         .from('members')
-        .insert({
-          first_name: newMemberName,
-          last_name: '',
-          email: '',
-          gym_id: user.email,
-          qr_code: ''
-        });
+        .insert([newMember])
+        .select();
 
       if (error) {
         console.error("Error adding member:", error);
         throw new Error(error.message);
       }
+      
+      console.log("Member added successfully:", data);
       return data;
     },
     onSuccess: () => {
@@ -92,12 +111,12 @@ const MembersPage: React.FC = () => {
       setIsDialogOpen(false);
     },
     onError: (error: any) => {
+      console.error("Error in mutation:", error);
       toast({
         title: "Error",
-        description: "Failed to add member",
+        description: `Failed to add member: ${error.message}`,
         variant: "destructive"
       });
-      console.error("Error adding member:", error);
     }
   });
 
@@ -106,7 +125,16 @@ const MembersPage: React.FC = () => {
   const handleCloseDialog = () => setIsDialogOpen(false);
 
   const handleAddMember = async () => {
-    if (newMemberName.trim() === '') return;
+    if (newMemberName.trim() === '') {
+      toast({
+        title: "Error",
+        description: "Member name cannot be empty",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    console.log("Attempting to add member:", newMemberName);
     await addMemberMutation.mutate(newMemberName);
   };
 
@@ -141,12 +169,24 @@ const MembersPage: React.FC = () => {
     setQrCode(null);
   };
 
-  if (isLoading) return <div>Loading members...</div>;
-  if (isError) return <div>Error fetching members.</div>;
+  if (isLoading) return <div className="p-6">Loading members...</div>;
+  
+  if (isError) {
+    console.error("Error details:", error);
+    return (
+      <div className="p-6">
+        <h2 className="text-xl font-bold text-red-500 mb-2">Error fetching members</h2>
+        <p className="mb-4">{error instanceof Error ? error.message : "Unknown error occurred"}</p>
+        <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['members'] })}>
+          Try Again
+        </Button>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
+    <div className="p-6">
+      <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Members</h1>
         <div className="flex items-center space-x-2">
           <div className="relative">
@@ -166,34 +206,50 @@ const MembersPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-        {filteredMembers.map((member) => (
-          <Card key={member.id} className="bg-white shadow-md rounded-md">
-            <CardContent className="p-4">
-              <Link to={`/members/${member.id}`} className="block hover:underline">
-                <h2 className="text-lg font-semibold text-gray-800">{member.first_name} {member.last_name}</h2>
-              </Link>
-              <div className="flex justify-between mt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/members/${member.id}`)}
-                >
-                  View Details
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleGenerateQrCode(member.id)}
-                >
-                  <QrCode className="mr-2 h-4 w-4" />
-                  QR Code
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {filteredMembers.length === 0 ? (
+        <div className="text-center py-10">
+          <Users className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-2 text-sm font-semibold text-gray-900">No members</h3>
+          <p className="mt-1 text-sm text-gray-500">Get started by adding a new member.</p>
+          <div className="mt-6">
+            <Button onClick={handleOpenDialog}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Add Member
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          {filteredMembers.map((member) => (
+            <Card key={member.id} className="bg-white shadow-md rounded-md">
+              <CardContent className="p-4">
+                <Link to={`/members/${member.id}`} className="block hover:underline">
+                  <h2 className="text-lg font-semibold text-gray-800">
+                    {member.first_name} {member.last_name}
+                  </h2>
+                </Link>
+                <div className="flex justify-between mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/members/${member.id}`)}
+                  >
+                    View Details
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleGenerateQrCode(member.id)}
+                  >
+                    <QrCode className="mr-2 h-4 w-4" />
+                    QR Code
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
@@ -214,6 +270,7 @@ const MembersPage: React.FC = () => {
                 value={newMemberName}
                 onChange={(e) => setNewMemberName(e.target.value)}
                 className="col-span-3"
+                autoComplete="off"
               />
             </div>
           </div>
@@ -221,7 +278,11 @@ const MembersPage: React.FC = () => {
             <Button type="button" variant="secondary" onClick={handleCloseDialog}>
               Cancel
             </Button>
-            <Button type="submit" onClick={handleAddMember} disabled={addMemberMutation.isPending}>
+            <Button 
+              type="submit" 
+              onClick={handleAddMember} 
+              disabled={addMemberMutation.isPending || newMemberName.trim() === ''}
+            >
               {addMemberMutation.isPending ? "Adding..." : "Add Member"}
             </Button>
           </DialogFooter>

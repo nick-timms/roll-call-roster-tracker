@@ -3,3 +3,9 @@ project_id = "ktwcyzsxzivlibsaschj"
 
 [postgres_config]
 version = 15
+
+[api]
+port = 54321
+schemas = ["public", "storage"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
