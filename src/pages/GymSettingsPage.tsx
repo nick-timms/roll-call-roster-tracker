@@ -59,7 +59,14 @@ const GymSettingsPage: React.FC = () => {
       
       if (gyms) {
         console.log("Found gym details:", gyms);
-        setGymDetails(gyms);
+        setGymDetails({
+          id: gyms.id || '',
+          name: gyms.name || 'My Gym',
+          phone: gyms.phone || '',
+          company_name: gyms.company_name || '',
+          address: gyms.address || '',
+          email: gyms.email || user.email || ''
+        });
       } else {
         console.log("No gym found, using default values");
       }

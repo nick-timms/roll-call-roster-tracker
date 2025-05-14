@@ -49,22 +49,31 @@ export type Database = {
       }
       gyms: {
         Row: {
+          address: string | null
+          company_name: string | null
           created_at: string
           email: string
           id: string
           name: string
+          phone: string | null
         }
         Insert: {
+          address?: string | null
+          company_name?: string | null
           created_at?: string
           email: string
           id?: string
           name: string
+          phone?: string | null
         }
         Update: {
+          address?: string | null
+          company_name?: string | null
           created_at?: string
           email?: string
           id?: string
           name?: string
+          phone?: string | null
         }
         Relationships: []
       }
