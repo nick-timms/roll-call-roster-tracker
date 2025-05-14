@@ -10,12 +10,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <span className="ml-3 text-gray-600">Loading...</span>
       </div>
     );
   }
   
   if (!user) {
-    // Save the attempted location to redirect back after login
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   

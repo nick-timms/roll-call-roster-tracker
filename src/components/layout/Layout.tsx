@@ -20,12 +20,14 @@ const Layout: React.FC = () => {
   const { toast } = useToast();
   const { user, signOut } = useAuth();
   const [gymName, setGymName] = useState('Your Gym');
+  const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
     const fetchGymDetails = async () => {
-      if (!user) return;
+      if (!user?.email) return;
       
       try {
+        setIsLoading(true);
         const { data: gyms, error } = await supabase
           .from('gyms')
           .select('name')
@@ -33,7 +35,7 @@ const Layout: React.FC = () => {
           .limit(1);
           
         if (error) {
-          console.error('Error fetching gym:', error);
+          console.error('Error fetching gym details:', error);
           return;
         }
         
@@ -42,10 +44,14 @@ const Layout: React.FC = () => {
         }
       } catch (error) {
         console.error('Failed to fetch gym details:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
     
-    fetchGymDetails();
+    if (user?.email) {
+      fetchGymDetails();
+    }
   }, [user]);
 
   const handleLogout = async () => {

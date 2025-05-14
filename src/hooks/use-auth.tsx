@@ -69,7 +69,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Check your email for a confirmation link",
       });
 
-      // Create default gym for the new user
+      // Create default gym for the new user after signup
       try {
         const { error: gymError } = await supabase
           .from('gyms')
@@ -135,11 +135,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             });
           }
         }
-      } catch (createGymError) {
-        console.error('Failed to create default gym:', createGymError);
+        
+        // Always navigate to dashboard after successful sign in
+        navigate('/dashboard');
+      } catch (error) {
+        console.error('Failed during gym check/creation:', error);
+        // Still navigate to dashboard even if gym check fails
+        navigate('/dashboard');
       }
-      
-      navigate('/dashboard');
     } catch (error: any) {
       toast({
         title: "Error signing in",
