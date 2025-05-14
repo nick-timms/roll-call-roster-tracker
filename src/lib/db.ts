@@ -1,3 +1,4 @@
+
 import { Gym, Member, AttendanceRecord } from "@/types";
 
 // Fake database using localStorage
@@ -50,7 +51,7 @@ class Database {
     
     // Also delete their attendance records
     const records = this.getAttendanceRecords();
-    const filteredRecords = records.filter(record => record.memberId !== id);
+    const filteredRecords = records.filter(record => record.member_id !== id);
     this.setItem("attendanceRecords", filteredRecords);
   }
 
@@ -61,7 +62,7 @@ class Database {
 
   getAttendanceByMemberId(memberId: string): AttendanceRecord[] {
     const records = this.getAttendanceRecords();
-    return records.filter(record => record.memberId === memberId);
+    return records.filter(record => record.member_id === memberId);
   }
 
   getAttendanceByDate(date: string): AttendanceRecord[] {
@@ -92,12 +93,12 @@ class Database {
     
     // Check if already checked in today
     const existingRecord = records.find(
-      r => r.memberId === record.memberId && r.date === record.date
+      r => r.member_id === record.member_id && r.date === record.date
     );
     
     if (existingRecord) {
       // Update existing record
-      existingRecord.timeIn = record.timeIn;
+      existingRecord.time_in = record.time_in;
       if (record.notes) existingRecord.notes = record.notes;
     } else {
       // Add new record

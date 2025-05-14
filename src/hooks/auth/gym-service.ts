@@ -3,23 +3,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { Session } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 
-export async function createDefaultGym() {
+export async function ensureGymExists(email: string, gymName: string = 'My Gym') {
   try {
-    // Check for an existing session
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session || !session.user) {
-      console.log("No authenticated user found");
-      return null;
-    }
-    
-    console.log("Creating default gym for user:", session.user.email);
+    console.log("Ensuring gym exists for:", email);
     
     // Check if gym already exists for this user
     const { data: existingGym, error: queryError } = await supabase
       .from('gyms')
       .select('*')
-      .eq('email', session.user.email)
+      .eq('email', email)
       .limit(1);
       
     if (queryError) {
@@ -34,8 +26,8 @@ export async function createDefaultGym() {
     
     // Create new gym
     const newGym = {
-      name: `${session.user.email}'s Gym`,
-      email: session.user.email,
+      name: gymName,
+      email: email,
     };
     
     console.log("Inserting new gym:", newGym);
@@ -52,6 +44,25 @@ export async function createDefaultGym() {
     
     console.log("Successfully created gym:", createdGym);
     return createdGym[0];
+  } catch (error) {
+    console.error("Error in ensureGymExists:", error);
+    throw error;
+  }
+}
+
+export async function createDefaultGym() {
+  try {
+    // Check for an existing session
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session || !session.user) {
+      console.log("No authenticated user found");
+      return null;
+    }
+    
+    console.log("Creating default gym for user:", session.user.email);
+    
+    return ensureGymExists(session.user.email);
   } catch (error) {
     console.error("Error in createDefaultGym:", error);
     throw error;

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -39,7 +40,7 @@ const DashboardPage: React.FC = () => {
   // Calculate attendance statistics
   const todayAttendance = allAttendance.filter(record => record.date === today).length;
   const uniqueMemberAttendance = Array.from(
-    new Set(filteredAttendance.map(record => record.memberId))
+    new Set(filteredAttendance.map(record => record.member_id))
   ).length;
   
   // Attendance visualization data
@@ -186,7 +187,7 @@ const DashboardPage: React.FC = () => {
             </TableHeader>
             <TableBody>
               {members.slice(0, 5).map((member) => {
-                const memberAttendance = allAttendance.filter(a => a.memberId === member.id);
+                const memberAttendance = allAttendance.filter(a => a.member_id === member.id);
                 const lastAttendance = memberAttendance.length > 0 
                   ? memberAttendance.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
                   : null;
@@ -197,20 +198,20 @@ const DashboardPage: React.FC = () => {
                       <Checkbox 
                         checked={selectedMembers.includes(member.id)}
                         onCheckedChange={() => toggleMemberSelection(member.id)}
-                        aria-label={`Select ${member.firstName} ${member.lastName}`}
+                        aria-label={`Select ${member.first_name} ${member.last_name}`}
                       />
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
                           <span className="text-xs font-medium">
-                            {member.firstName.charAt(0) + member.lastName.charAt(0)}
+                            {member.first_name.charAt(0) + member.last_name.charAt(0)}
                           </span>
                         </div>
                         <div>
-                          <p className="font-medium">{`${member.firstName} ${member.lastName}`}</p>
+                          <p className="font-medium">{`${member.first_name} ${member.last_name}`}</p>
                           <p className="text-xs text-muted-foreground">
-                            {member.phoneNumber || member.phone || 'No phone'}
+                            {member.phone || 'No phone'}
                           </p>
                         </div>
                       </div>
@@ -353,19 +354,19 @@ const DashboardPage: React.FC = () => {
                     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                     .slice(0, 5)
                     .map((record) => {
-                      const member = db.getMemberById(record.memberId);
+                      const member = db.getMemberById(record.member_id);
                       return (
                         <TableRow key={record.id}>
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center mr-2">
                                 <span className="font-medium text-blue-700">
-                                  {member ? member.firstName.charAt(0) + member.lastName.charAt(0) : '??'}
+                                  {member ? member.first_name.charAt(0) + member.last_name.charAt(0) : '??'}
                                 </span>
                               </div>
                               <div>
                                 <p className="font-medium">
-                                  {member ? `${member.firstName} ${member.lastName}` : 'Unknown Member'}
+                                  {member ? `${member.first_name} ${member.last_name}` : 'Unknown Member'}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   {member?.email || 'No email'}
@@ -373,11 +374,11 @@ const DashboardPage: React.FC = () => {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell>{record.timeIn}</TableCell>
+                          <TableCell>{record.time_in}</TableCell>
                           <TableCell>{record.date}</TableCell>
                           <TableCell>
                             {member && (
-                              <Link to={`/members/${record.memberId}`}>
+                              <Link to={`/members/${record.member_id}`}>
                                 <Button variant="ghost" size="icon">
                                   <ArrowRight className="h-4 w-4" />
                                 </Button>
