@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -39,7 +38,7 @@ const MembersPage: React.FC = () => {
     queryFn: async () => {
       if (!user?.email) {
         console.log("No user email, creating default gym");
-        await createDefaultGym(user);
+        await createDefaultGym(user?.email || '', 'My Gym');
         return [];
       }
 
@@ -64,7 +63,7 @@ const MembersPage: React.FC = () => {
     mutationFn: async (newMemberName: string) => {
       if (!user?.email) {
         console.log("No user email found, attempting to create default gym");
-        await createDefaultGym(user);
+        await createDefaultGym(user?.email || '', 'My Gym');
         throw new Error("No user email available");
       }
 
