@@ -17,6 +17,7 @@ export type Database = {
           member_id: string
           notes: string | null
           time_in: string
+          time_out: string | null
         }
         Insert: {
           created_at?: string
@@ -25,6 +26,7 @@ export type Database = {
           member_id: string
           notes?: string | null
           time_in: string
+          time_out?: string | null
         }
         Update: {
           created_at?: string
@@ -33,6 +35,7 @@ export type Database = {
           member_id?: string
           notes?: string | null
           time_in?: string
+          time_out?: string | null
         }
         Relationships: [
           {
