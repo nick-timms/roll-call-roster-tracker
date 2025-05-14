@@ -6,6 +6,21 @@ version = 15
 
 [api]
 port = 54321
-schemas = ["public", "storage"]
-extra_search_path = ["public", "extensions"]
+schemas = ["public", "storage", "auth"]
+extra_search_path = ["public", "extensions", "auth"]
 max_rows = 1000
+
+# Enable anonymous access to all endpoints
+[auth.anonymous]
+disable = false
+
+# Configure storage for public access
+[storage]
+file_size_limit = "50MiB"
+
+# Add policies for the tables we're using
+[auth.policies]
+storage.objects = "true"
+gyms = "true"
+members = "true"
+attendance_records = "true"

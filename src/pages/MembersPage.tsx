@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -18,7 +18,6 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/auth/use-auth';
-import { createDefaultGym } from '@/hooks/auth/gym-service';
 
 const MembersPage: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -32,39 +31,45 @@ const MembersPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Fetch members using react-query with better error handling
+  // Fetch members using react-query with better error handling and offline support
   const { data: members, isLoading, isError, error } = useQuery({
     queryKey: ['members'],
     queryFn: async () => {
       if (!user?.email) {
-        console.log("No user email, creating default gym");
-        await createDefaultGym(user?.email || '', 'My Gym');
+        console.log("No user email found");
         return [];
       }
 
       console.log("Fetching members for gym:", user.email);
-      const { data, error } = await supabase
-        .from('members')
-        .select('*')
-        .eq('gym_id', user.email);
+      try {
+        const { data, error } = await supabase
+          .from('members')
+          .select('*')
+          .eq('gym_id', user.email);
 
-      if (error) {
-        console.error("Error fetching members:", error);
-        throw new Error(error.message);
+        if (error) {
+          console.error("Error fetching members:", error);
+          throw new Error(error.message);
+        }
+        
+        console.log("Members data:", data);
+        return data || [];
+      } catch (fetchError) {
+        console.error("Failed to fetch members:", fetchError);
+        // Return empty array instead of throwing to prevent UI from breaking
+        return [];
       }
-      
-      console.log("Members data:", data);
-      return data || [];
     },
+    retry: 1,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 10, // 10 minutes
   });
 
   // Mutation for adding a new member with improved error handling
   const addMemberMutation = useMutation({
     mutationFn: async (newMemberName: string) => {
       if (!user?.email) {
-        console.log("No user email found, attempting to create default gym");
-        await createDefaultGym(user?.email || '', 'My Gym');
-        throw new Error("No user email available");
+        throw new Error("You must be logged in to add members");
       }
 
       console.log("Adding member with name:", newMemberName, "to gym:", user.email);
@@ -167,8 +172,14 @@ const MembersPage: React.FC = () => {
     setQrCode(null);
   };
 
-  if (isLoading) return <div className="p-6">Loading members...</div>;
-  
+  // Display loading state
+  if (isLoading) return (
+    <div className="p-6 flex items-center justify-center h-64">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <span className="ml-3 text-gray-600">Loading members...</span>
+    </div>
+  );
+
   if (isError) {
     console.error("Error details:", error);
     return (
@@ -204,7 +215,21 @@ const MembersPage: React.FC = () => {
         </div>
       </div>
 
-      {filteredMembers.length === 0 ? (
+      {isError && (
+        <div className="p-4 mb-6 bg-red-50 border border-red-200 rounded-md">
+          <h3 className="text-lg font-semibold text-red-700">Error loading members</h3>
+          <p className="text-red-600">{error instanceof Error ? error.message : "Failed to load members data"}</p>
+          <Button 
+            variant="outline" 
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['members'] })}
+            className="mt-2"
+          >
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {!isError && filteredMembers.length === 0 ? (
         <div className="text-center py-10">
           <Users className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-2 text-sm font-semibold text-gray-900">No members</h3>

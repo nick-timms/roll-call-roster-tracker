@@ -154,11 +154,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(true);
       console.log("Signing out user...");
       
-      const { error } = await supabase.auth.signOut();
+      try {
+        // Try to sign out with Supabase
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+          console.warn("Error from Supabase during sign out:", error);
+          // Continue with local sign out even if Supabase fails
+        }
+      } catch (supabaseError) {
+        // If Supabase request fails (network issue), just log it
+        console.warn("Failed to reach Supabase during sign out:", supabaseError);
+        // Continue with local sign out
+      }
       
-      if (error) throw error;
-      
-      // Clear user and session state after successful signOut
+      // Always clear local state regardless of Supabase response
       setUser(null);
       setSession(null);
       
@@ -173,9 +182,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error during sign out:", error);
       toast({
         title: "Error signing out",
-        description: error.message || "Failed to sign out",
+        description: "We couldn't connect to the server, but you've been logged out locally",
         variant: "destructive",
       });
+      
+      // Still navigate to login page even if there was an error
+      navigate('/login', { replace: true });
     } finally {
       setIsLoading(false);
     }

@@ -74,15 +74,15 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
   const handleLogout = async () => {
     try {
       console.log("Logout button clicked");
+      
+      // Call the signOut function from auth context
       await signOut();
-      // No need for manual toast or navigation here since they're handled in signOut
+      
+      // Note: Navigation and toast are handled in the signOut function
+      // So we don't need to do anything else here
     } catch (error) {
       console.error('Error during logout:', error);
-      toast({
-        title: "Logout failed",
-        description: "There was a problem logging you out. Please try again.",
-        variant: "destructive"
-      });
+      // Toast is already handled in the signOut function
     }
   };
 
@@ -103,38 +103,65 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
     setIsLoading(true);
 
     try {
-      // If we have a gym ID, update it; otherwise create a new gym
+      // If we have a gym ID, update it; otherwise try to create a new gym
       if (gymId) {
-        const { error: updateError } = await supabase
-          .from('gyms')
-          .update({ name: newGymName })
-          .eq('id', gymId);
+        try {
+          const { error: updateError } = await supabase
+            .from('gyms')
+            .update({ name: newGymName })
+            .eq('id', gymId);
 
-        if (updateError) {
-          throw updateError;
+          if (updateError) {
+            throw updateError;
+          }
+          
+          toast({
+            title: "Success",
+            description: "Gym name updated successfully",
+          });
+          setIsUpdatingName(false);
+          
+          // Force refresh the page to update the gym name in the header
+          window.location.reload();
+        } catch (error) {
+          console.error('Network error updating gym name:', error);
+          toast({
+            title: "Connection Error",
+            description: "Failed to update gym name due to network issue. Please try again later.",
+            variant: "destructive"
+          });
         }
       } else {
-        // Create a new gym if none exists
-        const { error: insertError } = await supabase
-          .from('gyms')
-          .insert({ 
-            name: newGymName,
-            email: user.email
-          });
+        // Try to create a new gym if none exists
+        try {
+          const { error: insertError } = await supabase
+            .from('gyms')
+            .insert({ 
+              name: newGymName,
+              email: user.email
+            });
 
-        if (insertError) {
-          throw insertError;
+          if (insertError) {
+            throw insertError;
+          }
+          
+          toast({
+            title: "Success",
+            description: "Gym created successfully",
+          });
+          setIsUpdatingName(false);
+          
+          // Force refresh the page to update the gym name in the header
+          window.location.reload();
+        } catch (error) {
+          console.error('Error creating gym:', error);
+          toast({
+            title: "Error",
+            description: "Failed to create gym. Please try again.",
+            variant: "destructive"
+          });
         }
       }
-
-      toast({
-        title: "Success",
-        description: "Gym name updated successfully",
-      });
-      setIsUpdatingName(false);
-      
-      // Force refresh the page to update the gym name in the header
-      window.location.reload();
     } catch (error) {
       console.error('Error updating gym name:', error);
       toast({
