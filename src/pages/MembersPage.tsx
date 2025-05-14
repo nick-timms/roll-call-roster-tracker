@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { generateQRCode } from '@/lib/utils';
 import { Member } from '@/types';
 import { Users, UserPlus, Search, QrCode } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/auth/use-auth';
@@ -93,11 +93,11 @@ const MembersPage: React.FC = () => {
     enabled: !!user, // Only run if user is authenticated
     retry: 1,
     staleTime: 60000,
-    onSettled: (data, error) => {
-      if (error) {
+    meta: {
+      onError: (error: Error) => {
         toast({
           title: "Error",
-          description: `Could not load gym data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          description: `Could not load gym data: ${error.message || 'Unknown error'}`,
           variant: "destructive"
         });
       }
@@ -143,11 +143,11 @@ const MembersPage: React.FC = () => {
       }
     },
     enabled: !!gymData?.id && !!user, // Only run if gym data is available and user is authenticated
-    onSettled: (data, error) => {
-      if (error) {
+    meta: {
+      onError: (error: Error) => {
         toast({
           title: "Error",
-          description: `Could not load members: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          description: `Could not load members: ${error.message || 'Unknown error'}`,
           variant: "destructive"
         });
       }
