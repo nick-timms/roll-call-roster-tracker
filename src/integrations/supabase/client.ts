@@ -34,11 +34,20 @@ export const supabase = createClient<Database>(
         };
         
         console.log('Supabase fetch URL:', url);
-        console.log('Fetch options:', JSON.stringify(fetchOptions, null, 2));
+        console.log('Fetch options:', JSON.stringify({
+          ...fetchOptions,
+          headers: {
+            ...((fetchOptions as any).headers || {}),
+            Authorization: (fetchOptions as any).headers?.Authorization ? 'Bearer token present' : 'No auth token'
+          }
+        }, null, 2));
         
         return fetch(url, fetchOptions)
           .then(response => {
             console.log(`Response status for ${url}: ${response.status}`);
+            if (response.status >= 400) {
+              console.error(`Error response for ${url}:`, response.statusText);
+            }
             return response;
           })
           .catch(error => {

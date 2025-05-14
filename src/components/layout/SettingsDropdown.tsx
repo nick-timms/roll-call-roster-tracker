@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/auth/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { getGymIdByEmail } from '@/hooks/auth/gym-service';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ interface SettingsDropdownProps {
 }
 
 const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, session } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isUpdatingName, setIsUpdatingName] = useState(false);
@@ -43,22 +44,11 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
       if (!user?.email) return;
       
       try {
-        const { data: gyms, error } = await supabase
-          .from('gyms')
-          .select('id')
-          .eq('email', user.email)
-          .maybeSingle();
-          
-        if (error) {
-          console.error('Error fetching gym ID:', error);
-          return;
-        }
-        
-        if (gyms) {
-          setGymId(gyms.id);
-        }
+        const id = await getGymIdByEmail(user.email);
+        console.log("Fetched gym ID in settings:", id);
+        setGymId(id);
       } catch (error) {
-        console.error('Failed to fetch gym ID:', error);
+        console.error("Error fetching gym ID:", error);
       }
     };
     
@@ -100,18 +90,34 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
       return;
     }
 
+    if (!session) {
+      toast({
+        title: "Error",
+        description: "No active session found. Please try logging in again",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       // If we have a gym ID, update it; otherwise try to create a new gym
       if (gymId) {
         try {
+          console.log("Updating gym name for gym ID:", gymId);
+          console.log("Auth state:", { 
+            session: session ? "Present" : "Missing",
+            accessToken: session.access_token ? "Present" : "Missing"
+          });
+          
           const { error: updateError } = await supabase
             .from('gyms')
             .update({ name: newGymName })
             .eq('id', gymId);
 
           if (updateError) {
+            console.error("Error updating gym name:", updateError);
             throw updateError;
           }
           
@@ -123,17 +129,23 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
           
           // Force refresh the page to update the gym name in the header
           window.location.reload();
-        } catch (error) {
+        } catch (error: any) {
           console.error('Network error updating gym name:', error);
           toast({
             title: "Connection Error",
-            description: "Failed to update gym name due to network issue. Please try again later.",
+            description: `Failed to update gym name: ${error.message || "Network issue"}`,
             variant: "destructive"
           });
         }
       } else {
         // Try to create a new gym if none exists
         try {
+          console.log("Creating new gym for email:", user.email);
+          console.log("Auth state:", { 
+            session: session ? "Present" : "Missing",
+            accessToken: session.access_token ? "Present" : "Missing"
+          });
+          
           const { error: insertError } = await supabase
             .from('gyms')
             .insert({ 
@@ -142,6 +154,7 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
             });
 
           if (insertError) {
+            console.error("Error creating gym:", insertError);
             throw insertError;
           }
           
@@ -153,20 +166,20 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
           
           // Force refresh the page to update the gym name in the header
           window.location.reload();
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error creating gym:', error);
           toast({
             title: "Error",
-            description: "Failed to create gym. Please try again.",
+            description: `Failed to create gym: ${error.message || "Unknown error"}`,
             variant: "destructive"
           });
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating gym name:', error);
       toast({
         title: "Error",
-        description: "Failed to update gym name, but you can still use the app",
+        description: `Failed to update gym settings: ${error.message || "Unknown error"}`,
         variant: "destructive"
       });
     } finally {

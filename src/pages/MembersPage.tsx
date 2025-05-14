@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -18,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/auth/use-auth';
+import { getGymIdByEmail } from '@/hooks/auth/gym-service';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,21 +39,39 @@ const MembersPage: React.FC = () => {
   const [isQrCodeDialogOpen, setIsQrCodeDialogOpen] = useState(false);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [isErrorDialogOpen, setIsErrorDialogOpen] = useState(false);
+  const [gymId, setGymId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Fetch gym ID on component mount
+  useEffect(() => {
+    const fetchGymId = async () => {
+      if (!user?.email) return;
+      
+      try {
+        const id = await getGymIdByEmail(user.email);
+        console.log("Fetched gym ID:", id);
+        setGymId(id);
+      } catch (err) {
+        console.error("Error fetching gym ID:", err);
+      }
+    };
+    
+    fetchGymId();
+  }, [user?.email]);
+
   // Fetch members using react-query with better error handling and offline support
   const { data: members, isLoading, isError, error } = useQuery({
-    queryKey: ['members'],
+    queryKey: ['members', gymId],
     queryFn: async () => {
-      if (!user?.email) {
-        console.log("No user email found");
+      if (!user?.email || !gymId) {
+        console.log("No user email or gym ID found, cannot fetch members");
         return [];
       }
 
-      console.log("Fetching members for gym:", user.email);
+      console.log("Fetching members for gym ID:", gymId);
       try {
         // Log supabase client state for debugging
         console.log("Supabase client state:", {
@@ -62,7 +82,7 @@ const MembersPage: React.FC = () => {
         const { data, error } = await supabase
           .from('members')
           .select('*')
-          .eq('gym_id', user.email);
+          .eq('gym_id', gymId);
 
         if (error) {
           console.error("Error fetching members:", error);
@@ -77,6 +97,7 @@ const MembersPage: React.FC = () => {
         return [];
       }
     },
+    enabled: !!gymId,
     retry: 1,
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 10, // 10 minutes
@@ -88,8 +109,12 @@ const MembersPage: React.FC = () => {
       if (!user?.email) {
         throw new Error("You must be logged in to add members");
       }
+      
+      if (!gymId) {
+        throw new Error("No gym ID found. Please make sure your gym is set up correctly");
+      }
 
-      console.log("Adding member with name:", newMemberName, "to gym:", user.email);
+      console.log("Adding member with name:", newMemberName, "to gym ID:", gymId);
       console.log("Session state:", session ? "Valid session" : "No session");
       
       try {
@@ -105,7 +130,7 @@ const MembersPage: React.FC = () => {
           first_name: newMemberName,
           last_name: '',
           email: '',
-          gym_id: user.email,
+          gym_id: gymId,
           qr_code: qrCodeDataUrl || ''
         };
         
@@ -151,7 +176,7 @@ const MembersPage: React.FC = () => {
     },
     onSuccess: () => {
       // Invalidate and refetch members
-      queryClient.invalidateQueries({ queryKey: ['members'] });
+      queryClient.invalidateQueries({ queryKey: ['members', gymId] });
       toast({
         title: "Success",
         description: "Member added successfully",
@@ -175,7 +200,6 @@ const MembersPage: React.FC = () => {
 
   // Handlers
   const handleOpenDialog = () => setIsDialogOpen(true);
-  const handleCloseDialog = () => setIsDialogOpen(false);
 
   const handleAddMember = async () => {
     if (newMemberName.trim() === '') {
@@ -227,7 +251,17 @@ const MembersPage: React.FC = () => {
     setErrorDetails(null);
   };
 
-  // Display loading state
+  // Loading state when waiting for gym ID
+  if (!gymId && user?.email) {
+    return (
+      <div className="p-6 flex items-center justify-center h-64">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <span className="ml-3 text-gray-600">Loading gym data...</span>
+      </div>
+    );
+  }
+
+  // Display loading state for members
   if (isLoading) return (
     <div className="p-6 flex items-center justify-center h-64">
       <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
@@ -241,7 +275,7 @@ const MembersPage: React.FC = () => {
       <div className="p-6">
         <h2 className="text-xl font-bold text-red-500 mb-2">Error fetching members</h2>
         <p className="mb-4">{error instanceof Error ? error.message : "Unknown error occurred"}</p>
-        <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['members'] })}>
+        <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['members', gymId] })}>
           Try Again
         </Button>
       </div>
@@ -276,7 +310,7 @@ const MembersPage: React.FC = () => {
           <p className="text-red-600">{error instanceof Error ? error.message : "Failed to load members data"}</p>
           <Button 
             variant="outline" 
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['members'] })}
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['members', gymId] })}
             className="mt-2"
           >
             Try again
