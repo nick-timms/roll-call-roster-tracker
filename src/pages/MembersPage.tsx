@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,15 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/auth/use-auth';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const MembersPage: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -26,8 +36,10 @@ const MembersPage: React.FC = () => {
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [isQrCodeDialogOpen, setIsQrCodeDialogOpen] = useState(false);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [isErrorDialogOpen, setIsErrorDialogOpen] = useState(false);
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -42,6 +54,13 @@ const MembersPage: React.FC = () => {
 
       console.log("Fetching members for gym:", user.email);
       try {
+        // Log supabase client state for debugging
+        console.log("Supabase client state:", {
+          url: supabase.getUrl(),
+          authHeaders: session ? "Auth headers present" : "No auth headers",
+          userSession: session ? "Session exists" : "No session"
+        });
+        
         const { data, error } = await supabase
           .from('members')
           .select('*')
@@ -73,35 +92,63 @@ const MembersPage: React.FC = () => {
       }
 
       console.log("Adding member with name:", newMemberName, "to gym:", user.email);
+      console.log("Session state:", session ? "Valid session" : "No session");
       
-      // Generate a random QR code for the member
-      const baseUrl = window.location.origin;
-      const tempId = Math.random().toString(36).substring(2, 15);
-      const memberUrl = `${baseUrl}/members/${tempId}`;
-      const qrCodeDataUrl = await generateQRCode(memberUrl);
-      
-      const newMember = {
-        first_name: newMemberName,
-        last_name: '',
-        email: '',
-        gym_id: user.email,
-        qr_code: qrCodeDataUrl || ''
-      };
-      
-      console.log("Submitting new member to Supabase:", newMember);
-      
-      const { data, error } = await supabase
-        .from('members')
-        .insert([newMember])
-        .select();
+      try {
+        // Generate a random QR code for the member
+        const baseUrl = window.location.origin;
+        const tempId = Math.random().toString(36).substring(2, 15);
+        const memberUrl = `${baseUrl}/members/${tempId}`;
+        
+        console.log("Generating QR code for URL:", memberUrl);
+        const qrCodeDataUrl = await generateQRCode(memberUrl);
+        
+        const newMember = {
+          first_name: newMemberName,
+          last_name: '',
+          email: '',
+          gym_id: user.email,
+          qr_code: qrCodeDataUrl || ''
+        };
+        
+        console.log("Submitting new member to Supabase:", newMember);
+        console.log("Supabase client config:", {
+          url: supabase.getUrl(),
+          headers: session ? "Auth headers present" : "No auth headers"
+        });
+        
+        const { data, error, status, statusText } = await supabase
+          .from('members')
+          .insert([newMember])
+          .select();
 
-      if (error) {
-        console.error("Error adding member:", error);
-        throw new Error(error.message);
+        if (error) {
+          // Log detailed error information
+          console.error("Error adding member:", {
+            error,
+            status,
+            statusText,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          });
+          
+          // Create detailed error message for debugging
+          const errorMsg = `Error: ${error.message}\nStatus: ${status}\nCode: ${error.code}\nHint: ${error.hint || 'None'}\nDetails: ${error.details || 'None'}`;
+          setErrorDetails(errorMsg);
+          
+          throw new Error(error.message);
+        }
+        
+        console.log("Member added successfully:", data);
+        return data;
+      } catch (err: any) {
+        // Capture network errors
+        console.error("Exception in mutation:", err);
+        const errorMsg = `Error: ${err.message}\n${err.stack ? `Stack: ${err.stack}` : ''}`;
+        setErrorDetails(errorMsg);
+        throw err;
       }
-      
-      console.log("Member added successfully:", data);
-      return data;
     },
     onSuccess: () => {
       // Invalidate and refetch members
@@ -115,6 +162,10 @@ const MembersPage: React.FC = () => {
     },
     onError: (error: any) => {
       console.error("Error in mutation:", error);
+      
+      // Show detailed error information
+      setIsErrorDialogOpen(true);
+      
       toast({
         title: "Error",
         description: `Failed to add member: ${error.message}`,
@@ -170,6 +221,11 @@ const MembersPage: React.FC = () => {
     setIsQrCodeDialogOpen(false);
     setSelectedMemberId(null);
     setQrCode(null);
+  };
+
+  const closeErrorDialog = () => {
+    setIsErrorDialogOpen(false);
+    setErrorDetails(null);
   };
 
   // Display loading state
@@ -330,6 +386,26 @@ const MembersPage: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      <AlertDialog open={isErrorDialogOpen} onOpenChange={setIsErrorDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Error Details</AlertDialogTitle>
+            <AlertDialogDescription>
+              <div className="bg-gray-100 p-4 rounded-md overflow-auto max-h-[300px]">
+                <pre className="whitespace-pre-wrap text-xs text-red-600">
+                  {errorDetails || "Unknown error occurred"}
+                </pre>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={closeErrorDialog}>
+              Close
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
