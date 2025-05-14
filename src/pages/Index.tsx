@@ -2,37 +2,29 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
+import { toast } from '@/hooks/use-toast';
 
 const Index = () => {
   const navigate = useNavigate();
   const { user, isLoading } = useAuth();
-  const [redirectTimeout, setRedirectTimeout] = useState<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
-    // Clear any existing timeout when component unmounts or dependencies change
-    return () => {
-      if (redirectTimeout) {
-        clearTimeout(redirectTimeout);
-      }
-    };
-  }, [redirectTimeout]);
-  
-  useEffect(() => {
-    if (isLoading) {
-      return; // Wait for auth to initialize
-    }
-    
-    // Set a timeout to prevent infinite loading if there's an issue
-    const timeout = setTimeout(() => {
+    // Only redirect once auth state is determined and component is mounted
+    if (!isLoading) {
+      console.log("Auth state determined, redirecting", { user: !!user });
+      
       if (user) {
+        console.log("User is authenticated, redirecting to dashboard");
         navigate('/dashboard', { replace: true });
+        toast({
+          title: "Welcome back",
+          description: "You have been redirected to your dashboard"
+        });
       } else {
+        console.log("User is not authenticated, redirecting to login");
         navigate('/login', { replace: true });
       }
-    }, 500); // Small delay to ensure state is stable
-    
-    setRedirectTimeout(timeout);
-    
+    }
   }, [user, navigate, isLoading]);
   
   // Return a loading indicator while auth state is being determined
