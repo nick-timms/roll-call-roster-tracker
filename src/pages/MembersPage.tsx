@@ -14,7 +14,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { generateQRCode } from '@/lib/utils';
-import { Member } from '@/types';
 import { Users, UserPlus, Search, QrCode } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -54,10 +53,10 @@ const MembersPage: React.FC = () => {
         console.error("Error fetching members:", error);
         throw new Error(error.message);
       }
+      
+      console.log("Members data:", data);
       return data || [];
     },
-    retry: 1,
-    retryDelay: 1000,
   });
 
   // Mutation for adding a new member with improved error handling
@@ -141,7 +140,7 @@ const MembersPage: React.FC = () => {
   const filteredMembers = members
     ? members.filter(member =>
         member.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        member.last_name?.toLowerCase().includes(searchQuery.toLowerCase())
+        (member.last_name && member.last_name.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     : [];
 

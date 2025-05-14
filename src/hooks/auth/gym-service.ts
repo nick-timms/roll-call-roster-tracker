@@ -1,138 +1,109 @@
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
-import { GymDetails } from './types';
 
-/**
- * Creates or gets an existing gym for a user
- */
-export const ensureGymExists = async (email: string, preferredGymName: string = 'My Gym'): Promise<GymDetails> => {
-  if (!email) {
-    console.error("Cannot ensure gym exists: No email provided");
-    throw new Error("Email is required to ensure a gym exists");
-  }
+import { supabase } from '@/integrations/supabase/client';
+import { Session } from '@supabase/supabase-js';
+import { v4 as uuidv4 } from 'uuid';
 
+export async function createDefaultGym() {
   try {
-    console.log(`Ensuring gym exists for ${email}`);
+    // Check for an existing session
+    const { data: { session } } = await supabase.auth.getSession();
     
-    // First check if a gym already exists for this email
-    const { data: existingGyms, error: checkError } = await supabase
-      .from('gyms')
-      .select('id, name')
-      .eq('email', email)
-      .maybeSingle();
-    
-    if (checkError) {
-      console.error('Error checking for existing gym:', checkError);
-      throw new Error(`Failed to check for existing gym: ${checkError.message}`);
-    } 
-    
-    if (existingGyms) {
-      console.log('Gym already exists:', existingGyms.id);
-      return existingGyms;
+    if (!session || !session.user) {
+      console.log("No authenticated user found");
+      return null;
     }
     
-    // If no gym exists, create one
-    const gymName = preferredGymName || 'My Gym';
-    console.log(`Creating new gym "${gymName}" for ${email}`);
+    console.log("Creating default gym for user:", session.user.email);
     
-    const { data: newGym, error: gymError } = await supabase
-      .from('gyms')
-      .insert({
-        name: gymName,
-        email: email,
-      })
-      .select('id, name')
-      .single();
-      
-    if (gymError) {
-      console.error('Error creating gym:', gymError);
-      throw new Error(`Failed to create gym: ${gymError.message}`);
-    }
-    
-    console.log('Gym created successfully:', newGym.id);
-    
-    toast({
-      title: 'Gym created',
-      description: 'Your gym has been set up successfully.'
-    });
-    
-    return newGym;
-  } catch (error) {
-    console.error('Failed to ensure gym exists:', error);
-    throw error;
-  }
-};
-
-/**
- * Creates a default gym for a user with robust error handling
- */
-export const createDefaultGym = async () => {
-  try {
-    // Get the currently logged-in user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
-    if (userError) {
-      console.error("Error getting user:", userError);
-      return;
-    }
-    
-    if (!user) {
-      console.log("No user is logged in");
-      return;
-    }
-    
-    // Check if gym already exists for this user's email
-    const { data: existingGym, error: existingGymError } = await supabase
+    // Check if gym already exists for this user
+    const { data: existingGym, error: queryError } = await supabase
       .from('gyms')
       .select('*')
-      .eq('email', user.email)
-      .maybeSingle();
+      .eq('email', session.user.email)
+      .limit(1);
       
-    if (existingGymError) {
-      console.error("Error checking for existing gym:", existingGymError);
-      return;
+    if (queryError) {
+      console.error("Error checking for existing gym:", queryError);
+      throw queryError;
     }
     
-    if (existingGym) {
-      console.log("Gym already exists for this user");
-      return existingGym;
+    if (existingGym && existingGym.length > 0) {
+      console.log("Gym already exists for user:", existingGym[0]);
+      return existingGym[0];
     }
     
-    // Create a new gym with user's email
-    const { data: newGym, error: createGymError } = await supabase
+    // Create new gym
+    const newGym = {
+      name: `${session.user.email}'s Gym`,
+      email: session.user.email,
+    };
+    
+    console.log("Inserting new gym:", newGym);
+    
+    const { data: createdGym, error: insertError } = await supabase
       .from('gyms')
-      .insert([
-        { 
-          name: "My Gym", 
-          email: user.email,
-        }
-      ])
-      .select()
-      .single();
-    
-    if (createGymError) {
-      console.error("Error creating default gym:", createGymError);
-      toast({
-        title: "Error",
-        description: "Failed to create default gym",
-        variant: "destructive"
-      });
-      return;
+      .insert([newGym])
+      .select();
+      
+    if (insertError) {
+      console.error("Error creating gym:", insertError);
+      throw insertError;
     }
     
-    toast({
-      title: "Success", 
-      description: "Default gym created successfully"
-    });
-    
-    return newGym;
-    
+    console.log("Successfully created gym:", createdGym);
+    return createdGym[0];
   } catch (error) {
-    console.error("Failed to create default gym:", error);
-    toast({
-      title: "Error",
-      description: "An unexpected error occurred",
-      variant: "destructive"
-    });
+    console.error("Error in createDefaultGym:", error);
+    throw error;
   }
-};
+}
+
+export async function getGymId(session: Session | null) {
+  if (!session || !session.user || !session.user.email) {
+    console.error("Error fetching gym ID: No valid session or user email");
+    return null;
+  }
+  
+  try {
+    const { data: gym, error } = await supabase
+      .from('gyms')
+      .select('id')
+      .eq('email', session.user.email)
+      .single();
+      
+    if (error) {
+      console.error("Error fetching gym ID:", error);
+      return null;
+    }
+    
+    return gym?.id || null;
+  } catch (error) {
+    console.error("Error fetching gym ID:", error);
+    return null;
+  }
+}
+
+export async function getGymDetails(session: Session | null) {
+  if (!session || !session.user || !session.user.email) {
+    console.error("Error fetching gym details: No valid session or user email");
+    return null;
+  }
+  
+  try {
+    const { data: gym, error } = await supabase
+      .from('gyms')
+      .select('*')
+      .eq('email', session.user.email)
+      .single();
+      
+    if (error) {
+      console.error("Error fetching gym details:", error);
+      return null;
+    }
+    
+    return gym;
+  } catch (error) {
+    console.error("Error fetching gym details:", error);
+    return null;
+  }
+}

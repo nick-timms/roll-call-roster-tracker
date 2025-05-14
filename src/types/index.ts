@@ -8,23 +8,25 @@ export interface Gym {
 
 export interface Member {
   id: string;
-  firstName: string;
-  lastName: string;
-  email?: string;
-  phoneNumber?: string;
+  first_name: string;
+  last_name: string;
+  email: string;
   phone?: string;
   belt?: string;
   membership_status?: string;
+  membership_type?: string;
   notes?: string;
-  qrCode: string;
-  createdAt: string;
+  qr_code: string;
+  gym_id: string;
+  created_at: string;
 }
 
 export interface AttendanceRecord {
   id: string;
-  memberId: string;
+  member_id: string;
   date: string;
-  timeIn: string;
-  timeOut?: string;
+  time_in: string;
+  time_out?: string;
   notes?: string;
+  created_at: string;
 }
