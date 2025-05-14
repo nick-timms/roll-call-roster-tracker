@@ -13,14 +13,18 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { db } from '@/lib/db';
-import { generateId, generateQRCode } from '@/lib/utils';
+import { generateQRCode } from '@/lib/utils';
 import { Member } from '@/types';
 import { Users, UserPlus, Search, QrCode } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/use-auth';
 
 const MembersPage: React.FC = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newMember, setNewMember] = useState<Partial<Member>>({
@@ -31,13 +35,100 @@ const MembersPage: React.FC = () => {
     membershipType: 'Standard'
   });
   
-  const gym = db.getGym();
-  const members = db.getMembers();
+  // Fetch the gym data
+  const { data: gymData } = useQuery({
+    queryKey: ['gym'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('gyms')
+        .select('*')
+        .eq('email', user?.email || '')
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
   
-  const filteredMembers = members.filter((member) => {
-    const fullName = `${member.firstName} ${member.lastName}`.toLowerCase();
-    return fullName.includes(searchQuery.toLowerCase()) || 
-           member.email.toLowerCase().includes(searchQuery.toLowerCase());
+  // Fetch members data
+  const { data: members = [], isLoading } = useQuery({
+    queryKey: ['members'],
+    queryFn: async () => {
+      if (!gymData?.id) return [];
+      
+      const { data, error } = await supabase
+        .from('members')
+        .select('*')
+        .eq('gym_id', gymData.id);
+      
+      if (error) throw error;
+      
+      // Transform database columns to our frontend model
+      return data.map(member => ({
+        id: member.id,
+        gymId: member.gym_id,
+        firstName: member.first_name,
+        lastName: member.last_name,
+        email: member.email,
+        phone: member.phone || '',
+        membershipType: member.membership_type || 'Standard',
+        belt: member.belt || '',
+        qrCode: member.qr_code,
+        createdAt: member.created_at
+      }));
+    },
+    enabled: !!gymData?.id,
+  });
+  
+  // Add member mutation
+  const addMemberMutation = useMutation({
+    mutationFn: async (member: Partial<Member>) => {
+      if (!gymData?.id) throw new Error("Gym not found");
+      
+      const qrCode = generateQRCode(crypto.randomUUID());
+      
+      const { data, error } = await supabase
+        .from('members')
+        .insert({
+          gym_id: gymData.id,
+          first_name: member.firstName,
+          last_name: member.lastName,
+          email: member.email,
+          phone: member.phone,
+          membership_type: member.membershipType,
+          belt: member.belt,
+          qr_code: qrCode,
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['members'] });
+      toast({
+        title: "Member Added",
+        description: `${newMember.firstName} ${newMember.lastName} has been added successfully`
+      });
+      setNewMember({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        membershipType: 'Standard'
+      });
+      setShowAddDialog(false);
+    },
+    onError: (error) => {
+      console.error('Error adding member:', error);
+      toast({
+        title: "Error",
+        description: "There was a problem adding the member",
+        variant: "destructive"
+      });
+    }
   });
   
   const handleAddMember = () => {
@@ -50,44 +141,14 @@ const MembersPage: React.FC = () => {
       return;
     }
     
-    const memberId = generateId();
-    const qrCode = generateQRCode(memberId);
-    
-    const member: Member = {
-      id: memberId,
-      gymId: gym?.id || '',
-      firstName: newMember.firstName,
-      lastName: newMember.lastName,
-      email: newMember.email,
-      phone: newMember.phone || '',
-      membershipType: newMember.membershipType || 'Standard',
-      qrCode,
-      createdAt: new Date().toISOString()
-    };
-    
-    try {
-      db.saveMember(member);
-      toast({
-        title: "Member Added",
-        description: `${member.firstName} ${member.lastName} has been added successfully`
-      });
-      setNewMember({
-        firstName: '',
-        lastName: '',
-        email: '',
-        phone: '',
-        membershipType: 'Standard'
-      });
-      setShowAddDialog(false);
-    } catch (error) {
-      console.error('Error adding member:', error);
-      toast({
-        title: "Error",
-        description: "There was a problem adding the member",
-        variant: "destructive"
-      });
-    }
+    addMemberMutation.mutate(newMember);
   };
+  
+  const filteredMembers = members.filter((member) => {
+    const fullName = `${member.firstName} ${member.lastName}`.toLowerCase();
+    return fullName.includes(searchQuery.toLowerCase()) || 
+           member.email.toLowerCase().includes(searchQuery.toLowerCase());
+  });
   
   return (
     <div className="space-y-6 pb-16">
@@ -114,7 +175,11 @@ const MembersPage: React.FC = () => {
       </Card>
       
       <div className="space-y-2">
-        {filteredMembers.length > 0 ? (
+        {isLoading ? (
+          <div className="py-12 text-center bg-white rounded-xl border border-zinc-200 shadow-sm">
+            <p className="text-zinc-500">Loading members...</p>
+          </div>
+        ) : filteredMembers.length > 0 ? (
           filteredMembers.map((member) => (
             <Link to={`/members/${member.id}`} key={member.id}>
               <Card className="hover:bg-zinc-50 transition-colors border-zinc-200 shadow-sm">
@@ -227,7 +292,13 @@ const MembersPage: React.FC = () => {
             <Button variant="outline" onClick={() => setShowAddDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddMember} className="bg-primary hover:bg-primary/90">Add Member</Button>
+            <Button 
+              onClick={handleAddMember} 
+              className="bg-primary hover:bg-primary/90"
+              disabled={addMemberMutation.isPending}
+            >
+              {addMemberMutation.isPending ? 'Adding...' : 'Add Member'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

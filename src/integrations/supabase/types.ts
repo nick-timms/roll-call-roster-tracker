@@ -9,6 +9,109 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      attendance_records: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          member_id: string
+          notes: string | null
+          time_in: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          member_id: string
+          notes?: string | null
+          time_in: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          member_id?: string
+          notes?: string | null
+          time_in?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_records_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gyms: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      members: {
+        Row: {
+          belt: string | null
+          created_at: string
+          email: string
+          first_name: string
+          gym_id: string
+          id: string
+          last_name: string
+          membership_type: string | null
+          phone: string | null
+          qr_code: string
+        }
+        Insert: {
+          belt?: string | null
+          created_at?: string
+          email: string
+          first_name: string
+          gym_id: string
+          id?: string
+          last_name: string
+          membership_type?: string | null
+          phone?: string | null
+          qr_code: string
+        }
+        Update: {
+          belt?: string | null
+          created_at?: string
+          email?: string
+          first_name?: string
+          gym_id?: string
+          id?: string
+          last_name?: string
+          membership_type?: string | null
+          phone?: string | null
+          qr_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "members_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
