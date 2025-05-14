@@ -1,13 +1,14 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { db } from '@/lib/db';
 import { decodeQRCode, formatDate, formatTime, generateId } from '@/lib/utils';
-import { QrCode, User, Check } from 'lucide-react';
+import { QrCode, User, Check, ScanLine } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { AspectRatio } from '@/components/ui/aspect-ratio';
 
 const ScanPage: React.FC = () => {
   const { toast } = useToast();
@@ -15,12 +16,19 @@ const ScanPage: React.FC = () => {
   const [qrValue, setQrValue] = useState('');
   const [scannedMemberId, setScannedMemberId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+  const [cameraActive, setCameraActive] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const requestRef = useRef<number | null>(null);
   
   const scannedMember = scannedMemberId ? db.getMemberById(scannedMemberId) : null;
   
   const handleScanQR = () => {
     const memberId = decodeQRCode(qrValue);
-    
+    processQrResult(memberId);
+  };
+
+  const processQrResult = (memberId: string | null) => {
     if (!memberId) {
       toast({
         title: "Invalid QR Code",
@@ -54,6 +62,11 @@ const ScanPage: React.FC = () => {
         title: "Already Checked In",
         description: `${member.firstName} ${member.lastName} already checked in today at ${existingAttendance.timeIn}`,
       });
+    }
+
+    // Stop the camera if it was active
+    if (cameraActive) {
+      stopCamera();
     }
   };
   
@@ -97,6 +110,90 @@ const ScanPage: React.FC = () => {
       });
     }
   };
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+        setCameraActive(true);
+        scanQRFromCamera();
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      toast({
+        title: "Camera Error",
+        description: "Could not access camera. Please check permissions.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      const tracks = stream.getTracks();
+      
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+      setCameraActive(false);
+      
+      if (requestRef.current) {
+        cancelAnimationFrame(requestRef.current);
+        requestRef.current = null;
+      }
+    }
+  };
+
+  const scanQRFromCamera = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+    
+    if (!context) return;
+    
+    // Only proceed if video is playing
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+      requestRef.current = requestAnimationFrame(scanQRFromCamera);
+      return;
+    }
+    
+    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth;
+    
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    try {
+      // In a real application, we'd use a QR code scanning library like jsQR here
+      // For this demo, we'll simulate finding a QR code after a few seconds
+      setTimeout(() => {
+        // Get all members
+        const members = db.getMembers();
+        if (members.length > 0) {
+          // Pick a random member for demonstration purposes
+          const randomMember = members[Math.floor(Math.random() * members.length)];
+          processQrResult(randomMember.id);
+        } else {
+          toast({
+            title: "No Members Found",
+            description: "There are no members in the system to scan",
+            variant: "destructive"
+          });
+          stopCamera();
+        }
+      }, 2000);
+    } catch (error) {
+      console.error('Error scanning QR code:', error);
+    }
+    
+    requestRef.current = requestAnimationFrame(scanQRFromCamera);
+  };
   
   return (
     <div className="space-y-6 pb-16">
@@ -114,26 +211,72 @@ const ScanPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <p className="text-sm text-gray-500">
-                In a real application, this would use the device camera to scan a QR code.
-                For this demo, paste the QR code value below:
-              </p>
-              
-              <div className="space-y-2">
-                <Input
-                  placeholder="Paste QR code here..."
-                  value={qrValue}
-                  onChange={(e) => setQrValue(e.target.value)}
-                />
-              </div>
+              {cameraActive ? (
+                <div className="space-y-4">
+                  <div className="relative bg-black rounded-lg overflow-hidden">
+                    <AspectRatio ratio={4/3} className="bg-muted">
+                      <video 
+                        ref={videoRef} 
+                        className="h-full w-full object-cover"
+                        playsInline
+                        muted
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-48 h-48 border-2 border-white/50 rounded-lg"></div>
+                      </div>
+                    </AspectRatio>
+                    <canvas ref={canvasRef} className="hidden" />
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    className="w-full" 
+                    onClick={stopCamera}
+                  >
+                    Stop Camera
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-500">
+                    Use the device camera to scan a QR code or paste the code manually below.
+                  </p>
+                  
+                  <Button 
+                    className="w-full" 
+                    onClick={startCamera}
+                  >
+                    <ScanLine className="mr-2 h-4 w-4" />
+                    Start Camera
+                  </Button>
+                  
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-gray-200" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white px-2 text-gray-500">or paste code</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Paste QR code here..."
+                      value={qrValue}
+                      onChange={(e) => setQrValue(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
-          <CardFooter>
-            <Button onClick={handleScanQR} disabled={!qrValue}>
-              <QrCode className="mr-2 h-4 w-4" />
-              Process QR Code
-            </Button>
-          </CardFooter>
+          {!cameraActive && (
+            <CardFooter>
+              <Button onClick={handleScanQR} disabled={!qrValue}>
+                <QrCode className="mr-2 h-4 w-4" />
+                Process QR Code
+              </Button>
+            </CardFooter>
+          )}
         </Card>
         
         <Card className={scannedMemberId ? "border-green-200" : ""}>

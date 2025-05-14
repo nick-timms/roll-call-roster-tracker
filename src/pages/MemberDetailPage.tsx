@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -12,6 +11,7 @@ import { formatDate } from '@/lib/utils';
 import { AttendanceRecord } from '@/types';
 import { CalendarCheck, Trash2, QrCode, Calendar, Edit, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { QRCodeSVG } from 'qrcode.react';
 
 const MemberDetailPage: React.FC = () => {
   const { memberId } = useParams<{ memberId: string }>();
@@ -335,15 +335,16 @@ const MemberDetailPage: React.FC = () => {
           </DialogHeader>
           <div className="flex justify-center py-4">
             <div className="bg-white p-4 rounded-lg border border-gray-200">
-              {/* This is a dummy QR code for demo purposes */}
-              <div className="w-56 h-56 bg-gray-100 flex items-center justify-center">
-                <div className="text-center">
-                  <QrCode className="h-12 w-12 mx-auto text-gray-700 mb-2" />
-                  <p className="text-xs text-gray-500 max-w-[200px] break-all">
-                    {member.qrCode}
-                  </p>
-                </div>
-              </div>
+              <QRCodeSVG 
+                value={member.qrCode} 
+                size={224} 
+                level="H" 
+                includeMargin={true}
+                className="w-56 h-56"
+              />
+              <p className="text-xs text-center text-gray-500 mt-2">
+                {member.firstName} {member.lastName}
+              </p>
             </div>
           </div>
           <DialogFooter>
