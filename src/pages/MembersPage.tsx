@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -24,6 +24,7 @@ import { useAuth } from '@/hooks/use-auth';
 const MembersPage: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -36,24 +37,36 @@ const MembersPage: React.FC = () => {
   });
   
   // Fetch the gym data
-  const { data: gymData } = useQuery({
+  const { data: gymData, isLoading: isLoadingGym } = useQuery({
     queryKey: ['gym'],
     queryFn: async () => {
+      if (!user?.email) throw new Error("User is not logged in");
+      
       const { data, error } = await supabase
         .from('gyms')
         .select('*')
-        .eq('email', user?.email || '')
+        .eq('email', user.email)
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching gym:', error);
+        throw error;
+      }
+      
+      if (!data) {
+        console.error('No gym found for this user');
+        throw new Error("No gym found for this user");
+      }
+      
       return data;
     },
     enabled: !!user,
+    retry: 1,
   });
   
   // Fetch members data
   const { data: members = [], isLoading } = useQuery({
-    queryKey: ['members'],
+    queryKey: ['members', gymData?.id],
     queryFn: async () => {
       if (!gymData?.id) return [];
       
@@ -84,7 +97,10 @@ const MembersPage: React.FC = () => {
   // Add member mutation
   const addMemberMutation = useMutation({
     mutationFn: async (member: Partial<Member>) => {
-      if (!gymData?.id) throw new Error("Gym not found");
+      if (!gymData?.id) {
+        console.error("Gym data not available", { gymData });
+        throw new Error("Gym not found");
+      }
       
       const qrCode = generateQRCode(crypto.randomUUID());
       
@@ -103,7 +119,11 @@ const MembersPage: React.FC = () => {
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error("Error inserting member:", error);
+        throw error;
+      }
+      
       return data;
     },
     onSuccess: () => {
@@ -149,6 +169,36 @@ const MembersPage: React.FC = () => {
     return fullName.includes(searchQuery.toLowerCase()) || 
            member.email.toLowerCase().includes(searchQuery.toLowerCase());
   });
+  
+  // Show a message if gym data is still loading or not found
+  if (isLoadingGym) {
+    return (
+      <div className="space-y-6 pb-16">
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+          <h1 className="text-2xl font-bold text-zinc-900">Members</h1>
+        </div>
+        <div className="py-12 text-center bg-white rounded-xl border border-zinc-200 shadow-sm">
+          <p className="text-zinc-500">Loading gym information...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!gymData) {
+    return (
+      <div className="space-y-6 pb-16">
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+          <h1 className="text-2xl font-bold text-zinc-900">Members</h1>
+        </div>
+        <div className="py-12 text-center bg-white rounded-xl border border-zinc-200 shadow-sm">
+          <p className="text-zinc-500">No gym found. Please set up your gym in the dashboard.</p>
+          <Button onClick={() => navigate('/dashboard')} className="mt-4 bg-primary hover:bg-primary/90">
+            Go to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="space-y-6 pb-16">
