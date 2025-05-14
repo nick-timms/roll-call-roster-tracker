@@ -27,12 +27,14 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isUpdatingName, setIsUpdatingName] = useState(false);
-  const [newGymName, setNewGymName] = useState(initialGymName);
+  const [newGymName, setNewGymName] = useState(initialGymName || 'My Gym');
   const [isLoading, setIsLoading] = useState(false);
   const [gymId, setGymId] = useState<string | null>(null);
 
   useEffect(() => {
-    setNewGymName(initialGymName);
+    if (initialGymName) {
+      setNewGymName(initialGymName);
+    }
   }, [initialGymName]);
 
   // Get gym ID when component mounts
@@ -45,7 +47,7 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
           .from('gyms')
           .select('id')
           .eq('email', user.email)
-          .single();
+          .maybeSingle();
           
         if (error) {
           console.error('Error fetching gym ID:', error);

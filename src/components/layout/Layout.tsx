@@ -32,15 +32,19 @@ const Layout: React.FC = () => {
           .from('gyms')
           .select('name')
           .eq('email', user.email)
-          .limit(1);
+          .maybeSingle();
           
         if (error) {
           console.error('Error fetching gym details:', error);
           return;
         }
         
-        if (gyms && gyms.length > 0) {
-          setGymName(gyms[0].name);
+        if (gyms && gyms.name) {
+          console.log("Found gym name:", gyms.name);
+          setGymName(gyms.name);
+        } else {
+          console.log("No gym found or no name set, using default");
+          setGymName('My Gym');
         }
       } catch (error) {
         console.error('Failed to fetch gym details:', error);
@@ -69,11 +73,11 @@ const Layout: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-zinc-900">MatTrack</h1>
-                <p className="text-xs text-zinc-500">{gymName}</p>
+                <p className="text-xs text-zinc-500">{gymName || 'My Gym'}</p>
               </div>
             </div>
             <div className="flex space-x-3 items-center">
-              <SettingsDropdown gymName={gymName} />
+              <SettingsDropdown gymName={gymName || 'My Gym'} />
             </div>
           </div>
         </header>

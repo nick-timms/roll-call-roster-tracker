@@ -58,60 +58,69 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  const createDefaultGym = async (email: string, gymName: string = 'My Gym') => {
+  // Create or get gym for a user
+  const ensureGymExists = async (email: string, preferredGymName: string = 'My Gym') => {
+    if (!email) {
+      console.error("Cannot ensure gym exists: No email provided");
+      return null;
+    }
+
     try {
-      console.log(`Attempting to create gym '${gymName}' for ${email}`);
+      console.log(`Ensuring gym exists for ${email}`);
       
       // First check if a gym already exists for this email
       const { data: existingGyms, error: checkError } = await supabase
         .from('gyms')
-        .select('id')
+        .select('id, name')
         .eq('email', email)
-        .limit(1);
+        .maybeSingle();
       
       if (checkError) {
         console.error('Error checking for existing gym:', checkError);
-        return false;
+        return null;
       }
       
-      if (existingGyms && existingGyms.length > 0) {
-        console.log('Gym already exists for this user:', existingGyms[0].id);
-        return true; // Gym already exists, no need to create
+      if (existingGyms) {
+        console.log('Gym already exists:', existingGyms.id);
+        return existingGyms;
       }
       
       // If no gym exists, create one
+      const gymName = preferredGymName || 'My Gym';
+      console.log(`Creating new gym "${gymName}" for ${email}`);
+      
       const { data: newGym, error: gymError } = await supabase
         .from('gyms')
         .insert({
           name: gymName,
           email: email,
         })
-        .select('id')
+        .select('id, name')
         .single();
         
       if (gymError) {
-        console.error('Error creating default gym:', gymError);
-        return false;
+        console.error('Error creating gym:', gymError);
+        return null;
       }
       
-      console.log('Gym created successfully with ID:', newGym?.id);
+      console.log('Gym created successfully:', newGym.id);
       
       toast({
         title: 'Gym created',
         description: 'Your gym has been set up successfully.'
       });
       
-      return true;
+      return newGym;
     } catch (error) {
-      console.error('Failed to create default gym:', error);
-      return false;
+      console.error('Failed to ensure gym exists:', error);
+      return null;
     }
   };
 
   const signUp = async (email: string, password: string, gymName: string = 'My Gym') => {
     try {
       setIsLoading(true);
-      console.log("Starting signup process for:", email, "with gym:", gymName);
+      console.log("Starting signup process for:", email, "with gym name:", gymName);
       
       const { error, data } = await supabase.auth.signUp({
         email,
@@ -125,21 +134,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Check your email for a confirmation link",
       });
 
-      // We need to create the gym immediately
+      // After successful signup, create the gym
       if (data.user) {
-        console.log("User created with ID:", data.user.id, "Creating gym now...");
-        // Create the gym right away using provided email
-        const gymCreated = await createDefaultGym(email, gymName);
+        console.log("User created, now creating gym");
+        const gym = await ensureGymExists(email, gymName);
         
-        if (!gymCreated) {
-          console.error("Failed to create gym during signup for email:", email);
+        if (!gym) {
+          console.error("Failed to create gym during signup");
           toast({
             title: "Warning",
             description: "Your account was created but there was an issue setting up your gym.",
             variant: "destructive",
           });
-        } else {
-          console.log("Successfully created gym for user:", email);
         }
       }
 
@@ -149,7 +155,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           await signIn(email, password);
         } catch (signInError) {
           console.error("Failed to auto-sign in after signup:", signInError);
-          // We'll let the user sign in manually if auto-sign in fails
           navigate('/login', { replace: true });
         }
       }
@@ -177,28 +182,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       if (error) throw error;
       
-      // Check if user has a gym, if not create a default one
+      // Always ensure the user has a gym
       try {
-        console.log("Checking if user has a gym...");
-        const { data: gyms, error: fetchError } = await supabase
-          .from('gyms')
-          .select('id')
-          .eq('email', email)
-          .limit(1);
-          
-        if (fetchError) {
-          console.error('Error checking for gym:', fetchError);
-        }
-
-        if (!gyms || gyms.length === 0) {
-          console.log("No gym found for user, creating default gym");
-          // No gym found, create a default one
-          await createDefaultGym(email, 'My Gym');
+        const gym = await ensureGymExists(email);
+        if (!gym) {
+          console.warn("Could not ensure gym exists during sign in");
         } else {
-          console.log("Found gym for user:", gyms[0].id);
+          console.log("User has gym:", gym.name);
         }
-      } catch (error) {
-        console.error('Failed during gym check/creation:', error);
+      } catch (gymError) {
+        console.error('Error ensuring gym exists:', gymError);
       } finally {
         // Always navigate to dashboard with enough delay to ensure state is updated
         setTimeout(() => {
