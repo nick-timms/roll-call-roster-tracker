@@ -93,12 +93,14 @@ const MembersPage: React.FC = () => {
     enabled: !!user, // Only run if user is authenticated
     retry: 1,
     staleTime: 60000,
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Could not load gym data: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: "destructive"
-      });
+    onSettled: (data, error) => {
+      if (error) {
+        toast({
+          title: "Error",
+          description: `Could not load gym data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          variant: "destructive"
+        });
+      }
     }
   });
   
@@ -141,12 +143,14 @@ const MembersPage: React.FC = () => {
       }
     },
     enabled: !!gymData?.id && !!user, // Only run if gym data is available and user is authenticated
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Could not load members: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: "destructive"
-      });
+    onSettled: (data, error) => {
+      if (error) {
+        toast({
+          title: "Error",
+          description: `Could not load members: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          variant: "destructive"
+        });
+      }
     }
   });
   
