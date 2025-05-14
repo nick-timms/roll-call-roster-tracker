@@ -56,7 +56,7 @@ const MembersPage: React.FC = () => {
       try {
         // Log supabase client state for debugging
         console.log("Supabase client state:", {
-          url: supabase.getUrl(),
+          url: supabase.url || "URL not available",
           authHeaders: session ? "Auth headers present" : "No auth headers",
           userSession: session ? "Session exists" : "No session"
         });
@@ -113,7 +113,7 @@ const MembersPage: React.FC = () => {
         
         console.log("Submitting new member to Supabase:", newMember);
         console.log("Supabase client config:", {
-          url: supabase.getUrl(),
+          url: supabase.url || "URL not available",
           headers: session ? "Auth headers present" : "No auth headers"
         });
         
