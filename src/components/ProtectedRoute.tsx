@@ -4,16 +4,16 @@ import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect } from "react";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isLoading } = useAuth();
+  const { user, session, isLoading } = useAuth();
   const location = useLocation();
   const [shouldRedirect, setShouldRedirect] = useState(false);
   
   useEffect(() => {
     // Only set redirect state once loading is complete and we know user is null
-    if (!isLoading && !user) {
+    if (!isLoading && (!user || !session)) {
       setShouldRedirect(true);
     }
-  }, [isLoading, user]);
+  }, [isLoading, user, session]);
   
   if (isLoading) {
     return (

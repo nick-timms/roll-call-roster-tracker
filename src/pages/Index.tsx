@@ -5,21 +5,21 @@ import { useAuth } from '@/hooks/use-auth';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, session } = useAuth();
   const [hasRedirected, setHasRedirected] = useState(false);
   
   useEffect(() => {
-    // Only redirect once the auth state is determined and we haven't redirected yet
+    // Only redirect once auth state is fully determined and we haven't redirected yet
     if (!isLoading && !hasRedirected) {
       setHasRedirected(true); // Prevent multiple redirects
       
-      if (user) {
+      if (user && session) { // Make sure we have both user and session
         navigate('/dashboard', { replace: true });
       } else {
         navigate('/login', { replace: true });
       }
     }
-  }, [user, navigate, isLoading, hasRedirected]);
+  }, [user, session, navigate, isLoading, hasRedirected]);
   
   // Return a loading indicator while auth state is being determined
   return (
