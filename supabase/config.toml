@@ -1,2 +1,5 @@
 
 project_id = "ktwcyzsxzivlibsaschj"
+
+[postgres_config]
+version = 15
