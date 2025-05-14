@@ -6,7 +6,6 @@ import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/integrations/supabase/client';
 import SettingsDropdown from './SettingsDropdown';
 import { 
-  Calendar, 
   Users, 
   QrCode, 
   User,
@@ -66,13 +65,12 @@ const Layout: React.FC = () => {
         <header className="bg-white border-b border-zinc-200 shadow-sm sticky top-0 z-10">
           <div className="container mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center">
-                <span className="text-white font-bold text-base">M</span>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-zinc-900">MatTrack</h1>
-                <p className="text-xs text-zinc-500">{gymName}</p>
-              </div>
+              <img 
+                src="/lovable-uploads/46cafb72-bfce-40a5-b4b9-8c670433468d.png" 
+                alt="MatTrack Logo" 
+                className="h-8"
+              />
+              <p className="text-xs text-zinc-500">{gymName}</p>
             </div>
             <div className="flex space-x-3 items-center">
               <SettingsDropdown gymName={gymName} />
