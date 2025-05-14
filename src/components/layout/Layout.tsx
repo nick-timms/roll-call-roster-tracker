@@ -19,7 +19,7 @@ const Layout: React.FC = () => {
   const location = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const [gymName, setGymName] = useState('Your Gym');
+  const [gymName, setGymName] = useState('My Gym');
   const [isLoading, setIsLoading] = useState(false);
   
   useEffect(() => {
@@ -44,7 +44,6 @@ const Layout: React.FC = () => {
           setGymName(gyms.name);
         } else {
           console.log("No gym found or no name set, using default");
-          setGymName('My Gym');
         }
       } catch (error) {
         console.error('Failed to fetch gym details:', error);
@@ -73,11 +72,11 @@ const Layout: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-zinc-900">MatTrack</h1>
-                <p className="text-xs text-zinc-500">{gymName || 'My Gym'}</p>
+                <p className="text-xs text-zinc-500">{gymName}</p>
               </div>
             </div>
             <div className="flex space-x-3 items-center">
-              <SettingsDropdown gymName={gymName || 'My Gym'} />
+              <SettingsDropdown gymName={gymName} />
             </div>
           </div>
         </header>

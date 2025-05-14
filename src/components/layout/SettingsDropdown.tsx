@@ -88,10 +88,10 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
   };
 
   const updateGymName = async () => {
-    if (!user?.email || !gymId) {
+    if (!user?.email) {
       toast({
         title: "Error",
-        description: "Could not find gym information",
+        description: "You must be logged in to update gym settings",
         variant: "destructive"
       });
       return;
@@ -100,18 +100,28 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
     setIsLoading(true);
 
     try {
-      const { error: updateError } = await supabase
-        .from('gyms')
-        .update({ name: newGymName })
-        .eq('id', gymId);
+      // If we have a gym ID, update it; otherwise create a new gym
+      if (gymId) {
+        const { error: updateError } = await supabase
+          .from('gyms')
+          .update({ name: newGymName })
+          .eq('id', gymId);
 
-      if (updateError) {
-        toast({
-          title: "Error",
-          description: "Failed to update gym name",
-          variant: "destructive"
-        });
-        return;
+        if (updateError) {
+          throw updateError;
+        }
+      } else {
+        // Create a new gym if none exists
+        const { error: insertError } = await supabase
+          .from('gyms')
+          .insert({ 
+            name: newGymName,
+            email: user.email
+          });
+
+        if (insertError) {
+          throw insertError;
+        }
       }
 
       toast({
@@ -126,7 +136,7 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
       console.error('Error updating gym name:', error);
       toast({
         title: "Error",
-        description: "Failed to update gym name",
+        description: "Failed to update gym name, but you can still use the app",
         variant: "destructive"
       });
     } finally {

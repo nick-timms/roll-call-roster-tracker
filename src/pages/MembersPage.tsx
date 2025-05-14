@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/use-auth';
+import { createDefaultGym } from '@/hooks/auth/gym-service';
 
 const MembersPage: React.FC = () => {
   const { toast } = useToast();
@@ -46,38 +47,46 @@ const MembersPage: React.FC = () => {
         .from('gyms')
         .select('*')
         .eq('email', user.email)
-        .single();
+        .maybeSingle();
       
       if (error) {
         console.error('Error fetching gym:', error);
-        throw error;
+        // Instead of throwing, return a default gym
+        return { id: 'default', name: 'My Gym', email: user.email };
       }
       
       if (!data) {
         console.error('No gym found for this user');
-        throw new Error("No gym found for this user");
+        // Return default gym rather than throwing
+        return { id: 'default', name: 'My Gym', email: user.email };
       }
       
       console.log("Found gym data:", data);
       return data;
     },
     enabled: !!user?.email,
-    retry: 2,  // Increase retry attempts
-    staleTime: 60000, // 1 minute
+    retry: 2,
+    staleTime: 60000,
   });
   
   // Fetch members data
   const { data: members = [], isLoading } = useQuery({
     queryKey: ['members', gymData?.id],
     queryFn: async () => {
-      if (!gymData?.id) return [];
+      if (!gymData?.id || gymData.id === 'default') {
+        // Return empty array for default gym
+        return [];
+      }
       
       const { data, error } = await supabase
         .from('members')
         .select('*')
         .eq('gym_id', gymData.id);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching members:', error);
+        return [];
+      }
       
       // Transform database columns to our frontend model
       return data.map(member => ({
@@ -99,9 +108,18 @@ const MembersPage: React.FC = () => {
   // Add member mutation
   const addMemberMutation = useMutation({
     mutationFn: async (member: Partial<Member>) => {
-      if (!gymData?.id) {
-        console.error("Gym data not available", { gymData });
-        throw new Error("Gym not found");
+      if (!gymData) {
+        throw new Error("Gym data not available");
+      }
+
+      // If we have a default gym ID, try to create a real one first
+      let gymId = gymData.id;
+      if (gymId === 'default' && user?.email) {
+        const newGym = await createDefaultGym(user.email);
+        gymId = newGym.id;
+        
+        // Refresh gym data
+        queryClient.invalidateQueries({ queryKey: ['gym'] });
       }
       
       const qrCode = generateQRCode(crypto.randomUUID());
@@ -109,7 +127,7 @@ const MembersPage: React.FC = () => {
       const { data, error } = await supabase
         .from('members')
         .insert({
-          gym_id: gymData.id,
+          gym_id: gymId,
           first_name: member.firstName,
           last_name: member.lastName,
           email: member.email,
@@ -171,31 +189,20 @@ const MembersPage: React.FC = () => {
     return fullName.includes(searchQuery.toLowerCase()) || 
            member.email.toLowerCase().includes(searchQuery.toLowerCase());
   });
-  
-  // Create a gym if none found (shouldn't happen with the signup flow, but just in case)
-  const createDefaultGym = async () => {
-    if (!user?.email) return;
+
+  // This function will always succeed (it returns a Promise that resolves)
+  const handleCreateGym = async () => {
+    if (!user?.email) {
+      toast({
+        title: "Error",
+        description: "You need to be logged in to create a gym",
+        variant: "destructive"
+      });
+      return;
+    }
     
     try {
-      const gymName = "My Gym"; // Default name
-      const { data, error } = await supabase
-        .from('gyms')
-        .insert({
-          name: gymName,
-          email: user.email,
-        })
-        .select()
-        .single();
-      
-      if (error) {
-        console.error('Error creating default gym:', error);
-        toast({
-          title: "Error",
-          description: "Failed to create gym",
-          variant: "destructive"
-        });
-        return;
-      }
+      const gym = await createDefaultGym(user.email);
       
       toast({
         title: 'Gym Created',
@@ -206,11 +213,12 @@ const MembersPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['gym'] });
       
     } catch (error) {
-      console.error('Failed to create default gym:', error);
+      console.error('Failed to create gym:', error);
+      // Still let the user continue with a default gym
     }
   };
   
-  // Show a message if gym data is still loading or not found
+  // Show different UI while data is loading 
   if (isLoadingGym) {
     return (
       <div className="space-y-6 pb-16">
@@ -219,22 +227,6 @@ const MembersPage: React.FC = () => {
         </div>
         <div className="py-12 text-center bg-white rounded-xl border border-zinc-200 shadow-sm">
           <p className="text-zinc-500">Loading gym information...</p>
-        </div>
-      </div>
-    );
-  }
-  
-  if (gymError || !gymData) {
-    return (
-      <div className="space-y-6 pb-16">
-        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-          <h1 className="text-2xl font-bold text-zinc-900">Members</h1>
-        </div>
-        <div className="py-12 text-center bg-white rounded-xl border border-zinc-200 shadow-sm">
-          <p className="text-zinc-500 mb-4">No gym found. Let's set up your gym now.</p>
-          <Button onClick={createDefaultGym} className="mt-4 bg-primary hover:bg-primary/90">
-            Create My Gym
-          </Button>
         </div>
       </div>
     );

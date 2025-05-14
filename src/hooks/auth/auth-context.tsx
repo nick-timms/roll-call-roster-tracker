@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
 import { AuthContextType } from './types';
-import { ensureGymExists } from './gym-service';
+import { ensureGymExists, createDefaultGym } from './gym-service';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -68,19 +68,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Check your email for a confirmation link",
       });
 
-      // After successful signup, create the gym
+      // After successful signup, create the gym - but don't block on it
       if (data.user) {
         console.log("User created, now creating gym");
-        const gym = await ensureGymExists(email, gymName);
-        
-        if (!gym) {
-          console.error("Failed to create gym during signup");
-          toast({
-            title: "Warning",
-            description: "Your account was created but there was an issue setting up your gym.",
-            variant: "destructive",
-          });
-        }
+        // Don't await this - we don't want to block the signup flow
+        ensureGymExists(email, gymName).catch(err => {
+          console.error("Background gym creation failed:", err);
+          // No toast here - we don't want to confuse the user
+        });
       }
 
       // Auto sign in for better user experience
@@ -116,14 +111,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       if (error) throw error;
       
-      // Always ensure the user has a gym
+      // Always ensure the user has a gym, but don't block on it
       try {
-        const gym = await ensureGymExists(email);
-        if (!gym) {
+        // Don't await this - we don't want to block the signin flow
+        ensureGymExists(email).catch(gymError => {
           console.warn("Could not ensure gym exists during sign in");
-        } else {
-          console.log("User has gym:", gym.name);
-        }
+          // No need to show an error to the user
+        });
       } catch (gymError) {
         console.error('Error ensuring gym exists:', gymError);
       } finally {
