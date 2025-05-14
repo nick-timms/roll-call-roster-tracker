@@ -1,241 +1,194 @@
-
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { useNavigate, useParams } from 'react-router-dom';
+import { v4 as uuid } from 'uuid';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/hooks/use-toast';
-import { Member, AttendanceRecord } from '@/types';
-import { ArrowLeft, Calendar, Edit, QrCode, Save, Trash2, User } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { CalendarIcon } from 'lucide-react';
+import { cn, formatDate } from '@/lib/utils';
+import { db } from '@/lib/db';
+import { useToast } from "@/hooks/use-toast";
 
 const MemberDetailPage: React.FC = () => {
-  const { toast } = useToast();
   const { memberId } = useParams<{ memberId: string }>();
   const navigate = useNavigate();
-
-  const [member, setMember] = useState<Member | null>(null);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedMember, setEditedMember] = useState<Member | null>(null);
+  const { toast } = useToast();
+  const [member, setMember] = useState(db.getMemberById(memberId!));
+  const [date, setDate] = useState<Date | undefined>(new Date());
 
   useEffect(() => {
-    // Mock data for demonstration purposes
-    const mockMember: Member = {
-      id: memberId || '1',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john.doe@example.com',
-      gymId: 'gym123',
-      qrCode: 'qr123',
-      membershipType: 'Monthly',
-      membershipStatus: 'Active',
-      dateOfBirth: '1990-01-01',
-      address: '123 Main St',
-      phoneNumber: '555-1234',
-      emergencyContactName: 'Jane Doe',
-      emergencyContactPhone: '555-5678',
-      notes: 'Regular attendee',
-      createdAt: '2023-01-01',
-    };
+    if (memberId) {
+      const existingMember = db.getMemberById(memberId);
+      if (existingMember) {
+        setMember(existingMember);
+      } else {
+        toast({
+          title: "Member Not Found",
+          description: "The requested member does not exist.",
+          variant: "destructive",
+        });
+        navigate('/members');
+      }
+    }
+  }, [memberId, navigate, toast]);
 
-    const mockAttendance: AttendanceRecord[] = [
-      {
-        id: 'attendance1',
-        memberId: memberId || '1',
-        checkInTime: '2023-10-26 08:00:00',
-        checkOutTime: '2023-10-26 09:00:00',
-      },
-      {
-        id: 'attendance2',
-        memberId: memberId || '1',
-        checkInTime: '2023-10-27 09:00:00',
-        checkOutTime: '2023-10-27 10:00:00',
-      },
-    ];
+  const handleCheckIn = () => {
+    if (!member) return;
 
-    setMember(mockMember);
-    setAttendance(mockAttendance);
-    setEditedMember(mockMember);
-  }, [memberId]);
+    // Optimistically update the member's status
+    setMember(prevMember => {
+      if (!prevMember) return prevMember;
+      return {
+        ...prevMember,
+        membership_status: "Active"  // Changed from membershipStatus to membership_status
+      };
+    });
 
-  const handleEdit = () => {
-    setIsEditing(true);
-  };
+    // Add a check-in record
+    db.addAttendanceRecord({
+      id: uuid(),
+      memberId: member.id,
+      date: new Date().toISOString().split('T')[0],
+      timeIn: new Date().toLocaleTimeString(),  // Changed from checkInTime to timeIn
+    });
 
-  const handleSave = () => {
-    // Save the edited member data
-    setIsEditing(false);
     toast({
-      title: "Success",
-      description: "Member details updated successfully",
+      title: "Member Checked In",
+      description: `${member.firstName} ${member.lastName} has been checked in.`,
     });
   };
 
-  const handleDelete = () => {
-    // Delete the member
-    navigate('/members');
-    toast({
-      title: "Success",
-      description: "Member deleted successfully",
-    });
-  };
+  const handleCheckOut = () => {
+    if (!member) return;
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setEditedMember((prev) => ({ ...prev, [name]: value }));
-  };
+    // Find the last check-in record for the member without a check-out time
+    const lastCheckIn = db.getAttendanceRecords()
+      .filter(record => record.memberId === member.id && record.date === new Date().toISOString().split('T')[0])
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
-  const handleSelectChange = (value: string, name: string) => {
-    setEditedMember((prev) => ({ ...prev, [name]: value }));
+    if (lastCheckIn) {
+      // Update the check-out time for the last check-in record
+      db.updateAttendanceRecord(lastCheckIn.id, {
+        timeOut: new Date().toLocaleTimeString(),  // Changed from checkOutTime to timeIn
+      });
+
+      toast({
+        title: "Member Checked Out",
+        description: `${member.firstName} ${member.lastName} has been checked out.`,
+      });
+    } else {
+      // If no active check-in is found, show an error message
+      toast({
+        title: "No Active Check-in",
+        description: `${member.firstName} ${member.lastName} has no active check-in.`,
+        variant: "destructive",
+      });
+    }
   };
 
   if (!member) {
-    return <div>Loading member details...</div>;
+    return <div>Loading...</div>;
   }
+
+  const attendanceRecords = db.getAttendanceRecords().filter(record => record.memberId === member.id);
 
   return (
     <div className="space-y-6 pb-16">
-      <Button variant="ghost" onClick={() => navigate('/members')}>
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Back to Members
-      </Button>
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+        <h1 className="text-2xl font-bold text-zinc-900">{member.firstName} {member.lastName}</h1>
+        <div className="flex space-x-2">
+          <Button onClick={handleCheckIn} variant="outline">Check In</Button>
+          <Button onClick={handleCheckOut} variant="outline">Check Out</Button>
+        </div>
+      </div>
 
-      <Card className="border-zinc-200 shadow-sm">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <User className="h-5 w-5 text-primary" />
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Card className="border-zinc-200 shadow-sm">
+          <CardHeader>
             <CardTitle>Member Details</CardTitle>
-          </div>
-          <CardDescription>
-            View and manage member information.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="profile" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="profile">Profile</TabsTrigger>
-              <TabsTrigger value="attendance">Attendance</TabsTrigger>
-            </TabsList>
-            <TabsContent value="profile" className="space-y-2">
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="firstName" className="text-right">
-                    First Name
-                  </Label>
-                  <Input
-                    type="text"
-                    id="firstName"
-                    name="firstName"
-                    value={editedMember?.firstName || ''}
-                    onChange={handleInputChange}
-                    disabled={!isEditing}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="lastName" className="text-right">
-                    Last Name
-                  </Label>
-                  <Input
-                    type="text"
-                    id="lastName"
-                    name="lastName"
-                    value={editedMember?.lastName || ''}
-                    onChange={handleInputChange}
-                    disabled={!isEditing}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="email" className="text-right">
-                    Email
-                  </Label>
-                  <Input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={editedMember?.email || ''}
-                    onChange={handleInputChange}
-                    disabled={!isEditing}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="membershipType" className="text-right">
-                    Membership Type
-                  </Label>
-                  <Select
-                    onValueChange={(value) => handleSelectChange(value, "membershipType")}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select a membership type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Monthly">Monthly</SelectItem>
-                      <SelectItem value="Annual">Annual</SelectItem>
-                      <SelectItem value="Trial">Trial</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="membershipStatus" className="text-right">
-                    Membership Status
-                  </Label>
-                  <Select
-                    onValueChange={(value) => handleSelectChange(value, "membershipStatus")}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select a membership status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Inactive">Inactive</SelectItem>
-                      <SelectItem value="Suspended">Suspended</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+            <CardDescription>View and edit member information.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">First Name</Label>
+                <Input id="firstName" defaultValue={member.firstName} disabled />
               </div>
-            </TabsContent>
-            <TabsContent value="attendance">
-              <h2 className="text-lg font-semibold">Attendance Records</h2>
-              <ul>
-                {attendance.map((record) => (
-                  <li key={record.id} className="py-2">
-                    Check-in: {record.checkInTime}, Check-out: {record.checkOutTime}
-                  </li>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Last Name</Label>
+                <Input id="lastName" defaultValue={member.lastName} disabled />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" defaultValue={member.email || 'N/A'} disabled />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber">Phone Number</Label>
+              <Input id="phoneNumber" defaultValue={member.phoneNumber || member.phone || 'N/A'} disabled />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="belt">Belt</Label>
+              <Select disabled>
+                <SelectTrigger>
+                  <SelectValue placeholder={member.belt || 'Select a belt'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="white">White</SelectItem>
+                  <SelectItem value="blue">Blue</SelectItem>
+                  <SelectItem value="purple">Purple</SelectItem>
+                  <SelectItem value="brown">Brown</SelectItem>
+                  <SelectItem value="black">Black</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="membershipStatus">Membership Status</Label>
+              <Input id="membershipStatus" defaultValue={member.membership_status || 'N/A'} disabled />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Input id="notes" defaultValue={member.notes || 'N/A'} disabled />
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button variant="outline" onClick={() => navigate('/members')}>Back to Members</Button>
+          </CardFooter>
+        </Card>
+
+        <Card className="border-zinc-200 shadow-sm">
+          <CardHeader>
+            <CardTitle>Attendance History</CardTitle>
+            <CardDescription>View member's check-in history.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Check-In Time</TableHead>
+                  <TableHead>Check-Out Time</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {attendanceRecords.map((record) => (
+                  <TableRow key={record.id}>
+                    <TableCell>{record.date}</TableCell>
+                    <TableCell>{record.timeIn} {record.timeOut ? `- ${record.timeOut}` : ""}</TableCell>
+                    <TableCell>{record.timeOut || 'N/A'}</TableCell>
+                  </TableRow>
                 ))}
-              </ul>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-        <CardFooter className="flex justify-between">
-          {isEditing ? (
-            <>
-              <Button variant="outline" onClick={() => setIsEditing(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSave} className="bg-primary hover:bg-primary/90">
-                <Save className="mr-2 h-4 w-4" />
-                Save Changes
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button onClick={handleEdit} className="bg-primary hover:bg-primary/90">
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Details
-              </Button>
-              <Button variant="destructive" onClick={handleDelete}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Member
-              </Button>
-            </>
-          )}
-        </CardFooter>
-      </Card>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
