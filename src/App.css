@@ -56,19 +56,19 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .level-1 {
-  background-color: rgba(149, 128, 255, 0.2);
+  background-color: rgba(0, 0, 0, 0.2);
 }
 
 .level-2 {
-  background-color: rgba(149, 128, 255, 0.4);
+  background-color: rgba(0, 0, 0, 0.4);
 }
 
 .level-3 {
-  background-color: rgba(149, 128, 255, 0.6);
+  background-color: rgba(0, 0, 0, 0.6);
 }
 
 .level-4 {
-  background-color: rgba(149, 128, 255, 0.8);
+  background-color: rgba(0, 0, 0, 0.8);
 }
 
 .level-5 {
