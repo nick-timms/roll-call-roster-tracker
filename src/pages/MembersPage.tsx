@@ -39,7 +39,7 @@ const MembersPage: React.FC = () => {
     queryFn: async () => {
       if (!user?.email) {
         console.log("No user email, creating default gym");
-        await createDefaultGym();
+        await createDefaultGym(user);
         return [];
       }
 
@@ -64,7 +64,7 @@ const MembersPage: React.FC = () => {
     mutationFn: async (newMemberName: string) => {
       if (!user?.email) {
         console.log("No user email found, attempting to create default gym");
-        await createDefaultGym();
+        await createDefaultGym(user);
         throw new Error("No user email available");
       }
 

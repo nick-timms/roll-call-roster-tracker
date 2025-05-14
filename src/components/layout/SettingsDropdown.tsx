@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/auth/use-auth';
 import { useToast } from '@/hooks/use-toast';
@@ -7,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +25,7 @@ interface SettingsDropdownProps {
 const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) => {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [isUpdatingName, setIsUpdatingName] = useState(false);
   const [newGymName, setNewGymName] = useState(initialGymName || 'My Gym');
   const [isLoading, setIsLoading] = useState(false);
