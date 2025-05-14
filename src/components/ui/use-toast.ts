@@ -1,5 +1,5 @@
 
-// Re-export from the toaster component
-import { useToast, toast } from "@/hooks/use-toast"
+// Re-export from the hooks directory
+import { useToast, toast, type ToasterToast } from "@/hooks/use-toast";
 
-export { useToast, toast }
+export { useToast, toast, type ToasterToast };

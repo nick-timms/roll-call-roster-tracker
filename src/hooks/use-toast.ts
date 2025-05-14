@@ -1,5 +1,5 @@
 
-// Re-export from the toaster component
+// Hook for using the toast functionality
 import { useToast as useToastHook, type ToasterToast } from "@/components/ui/toaster";
 
 export const useToast = useToastHook;
