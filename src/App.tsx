@@ -12,8 +12,17 @@ import MemberDetailPage from "./pages/MemberDetailPage";
 import ScanPage from "./pages/ScanPage";
 import AccountPage from "./pages/AccountPage";
 import NotFound from "./pages/NotFound";
+import "./App.css";
 
-const queryClient = new QueryClient();
+// Set up query client with better defaults for UI
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

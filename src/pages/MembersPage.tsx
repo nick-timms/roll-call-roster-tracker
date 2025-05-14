@@ -92,45 +92,45 @@ const MembersPage: React.FC = () => {
   return (
     <div className="space-y-6 pb-16">
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-        <h1 className="text-2xl font-bold">Members</h1>
-        <Button onClick={() => setShowAddDialog(true)}>
+        <h1 className="text-2xl font-bold text-zinc-900">Members</h1>
+        <Button onClick={() => setShowAddDialog(true)} className="bg-primary hover:bg-primary/90">
           <UserPlus className="mr-2 h-4 w-4" />
           Add Member
         </Button>
       </div>
       
-      <Card>
-        <CardContent className="p-4">
+      <Card className="border-zinc-200 shadow-sm overflow-hidden">
+        <CardContent className="p-3">
           <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
             <Input
               placeholder="Search members..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-9 border-zinc-200 text-zinc-800 bg-zinc-50 focus:bg-white transition-colors"
             />
           </div>
         </CardContent>
       </Card>
       
-      <div className="space-y-4">
+      <div className="space-y-2">
         {filteredMembers.length > 0 ? (
           filteredMembers.map((member) => (
             <Link to={`/members/${member.id}`} key={member.id}>
-              <Card className="hover:bg-gray-50 transition-colors">
+              <Card className="hover:bg-zinc-50 transition-colors border-zinc-200 shadow-sm">
                 <CardContent className="p-4 flex justify-between items-center">
                   <div className="flex items-center">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-4">
-                      <span className="font-medium text-blue-700">
+                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center mr-4">
+                      <span className="font-medium text-primary">
                         {member.firstName.charAt(0)}{member.lastName.charAt(0)}
                       </span>
                     </div>
                     <div>
-                      <p className="font-medium">{member.firstName} {member.lastName}</p>
-                      <p className="text-sm text-gray-500">{member.membershipType}</p>
+                      <p className="font-medium text-zinc-900">{member.firstName} {member.lastName}</p>
+                      <p className="text-sm text-zinc-500">{member.membershipType}</p>
                     </div>
                   </div>
-                  <div className="flex items-center text-gray-400">
+                  <div className="flex items-center text-zinc-400">
                     <QrCode className="h-4 w-4" />
                   </div>
                 </CardContent>
@@ -138,16 +138,16 @@ const MembersPage: React.FC = () => {
             </Link>
           ))
         ) : (
-          <div className="py-12 text-center">
-            <Users className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-1">No members found</h3>
-            <p className="text-gray-500">
+          <div className="py-12 text-center bg-white rounded-xl border border-zinc-200 shadow-sm">
+            <Users className="h-12 w-12 mx-auto text-zinc-300 mb-4" />
+            <h3 className="text-lg font-medium text-zinc-900 mb-1">No members found</h3>
+            <p className="text-zinc-500">
               {searchQuery 
                 ? "No members match your search criteria" 
                 : "Add your first member to get started"}
             </p>
             {!searchQuery && (
-              <Button onClick={() => setShowAddDialog(true)} className="mt-4">
+              <Button onClick={() => setShowAddDialog(true)} className="mt-4 bg-primary hover:bg-primary/90">
                 <UserPlus className="mr-2 h-4 w-4" />
                 Add Member
               </Button>
@@ -157,7 +157,7 @@ const MembersPage: React.FC = () => {
       </div>
       
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add New Member</DialogTitle>
             <DialogDescription>
@@ -174,6 +174,7 @@ const MembersPage: React.FC = () => {
                   value={newMember.firstName}
                   onChange={(e) => setNewMember({...newMember, firstName: e.target.value})}
                   required
+                  className="border-zinc-200"
                 />
               </div>
               <div className="space-y-2">
@@ -183,6 +184,7 @@ const MembersPage: React.FC = () => {
                   value={newMember.lastName}
                   onChange={(e) => setNewMember({...newMember, lastName: e.target.value})}
                   required
+                  className="border-zinc-200"
                 />
               </div>
             </div>
@@ -195,6 +197,7 @@ const MembersPage: React.FC = () => {
                 value={newMember.email}
                 onChange={(e) => setNewMember({...newMember, email: e.target.value})}
                 required
+                className="border-zinc-200"
               />
             </div>
             
@@ -204,6 +207,7 @@ const MembersPage: React.FC = () => {
                 id="phone"
                 value={newMember.phone}
                 onChange={(e) => setNewMember({...newMember, phone: e.target.value})}
+                className="border-zinc-200"
               />
             </div>
             
@@ -214,6 +218,7 @@ const MembersPage: React.FC = () => {
                 value={newMember.membershipType}
                 onChange={(e) => setNewMember({...newMember, membershipType: e.target.value})}
                 placeholder="Standard"
+                className="border-zinc-200"
               />
             </div>
           </div>
@@ -222,7 +227,7 @@ const MembersPage: React.FC = () => {
             <Button variant="outline" onClick={() => setShowAddDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddMember}>Add Member</Button>
+            <Button onClick={handleAddMember} className="bg-primary hover:bg-primary/90">Add Member</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
