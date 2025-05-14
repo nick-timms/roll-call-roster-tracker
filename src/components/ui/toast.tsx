@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import * as ToastPrimitives from "@radix-ui/react-toast"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -113,6 +114,42 @@ ToastDescription.displayName = ToastPrimitives.Description.displayName
 type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
 
 type ToastActionElement = React.ReactElement<typeof ToastAction>
+
+// The actual implementation for toast and useToast
+import { createContext, useContext } from "react"
+
+type ToastPosition = "top" | "top-left" | "top-right" | "bottom" | "bottom-left" | "bottom-right"
+
+type ToasterToast = {
+  id: string
+  title?: React.ReactNode
+  description?: React.ReactNode
+  action?: ToastActionElement
+  position?: ToastPosition
+  variant?: "default" | "destructive"
+}
+
+const ToastContext = createContext<{
+  toasts: ToasterToast[]
+  addToast: (toast: Omit<ToasterToast, "id">) => void
+  updateToast: (id: string, toast: Partial<ToasterToast>) => void
+  dismissToast: (id: string) => void
+}>({
+  toasts: [],
+  addToast: () => {},
+  updateToast: () => {},
+  dismissToast: () => {},
+})
+
+export const useToast = () => useContext(ToastContext)
+
+export function toast({
+  ...props
+}: ToasterToast) {
+  const { addToast } = useToast()
+  
+  addToast(props)
+}
 
 export {
   type ToastProps,

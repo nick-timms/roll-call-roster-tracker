@@ -1,5 +1,9 @@
 
-// Re-export from shadcn/ui
-import { useToast, toast } from "@/components/ui/use-toast";
+// Direct import from shadcn/ui toast
+import {
+  useToast as useToastPrimitive,
+  toast as toastPrimitive,
+} from "@/components/ui/toast";
 
-export { useToast, toast };
+export const useToast = useToastPrimitive;
+export const toast = toastPrimitive;
