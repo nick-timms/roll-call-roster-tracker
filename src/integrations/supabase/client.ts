@@ -9,6 +9,7 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// Create Supabase client with proper authentication configuration
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
   SUPABASE_PUBLISHABLE_KEY,
@@ -16,7 +17,7 @@ export const supabase = createClient<Database>(
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      storage: localStorage,
+      storage: typeof window !== 'undefined' ? localStorage : undefined,
       detectSessionInUrl: true
     },
     global: {
@@ -24,7 +25,9 @@ export const supabase = createClient<Database>(
         'apikey': SUPABASE_PUBLISHABLE_KEY,
         'Content-Type': 'application/json'
       },
+      // Custom fetch handler with improved logging and retry logic
       fetch: (url, options = {}) => {
+        // Ensure headers are properly passed and structured
         const fetchOptions = {
           ...options,
           headers: {
@@ -34,26 +37,41 @@ export const supabase = createClient<Database>(
           }
         };
         
+        // Log fetch details for debugging
         console.log('Supabase fetch URL:', url);
         console.log('Fetch options:', JSON.stringify({
           ...fetchOptions,
           headers: {
             ...((fetchOptions as any).headers || {}),
+            // Mask sensitive data in logs
             Authorization: (fetchOptions as any).headers?.Authorization ? 'Bearer token present' : 'No auth token'
           }
         }, null, 2));
         
-        // Wrap fetch with retry logic for network issues
+        // Implement retry logic for network issues
         let retries = 0;
         const maxRetries = 3;
         const baseDelay = 500;
         
         const executeFetch = async (): Promise<Response> => {
           try {
+            // Add session token to request if available but not already present
+            if (typeof localStorage !== 'undefined' && !(fetchOptions as any)?.headers?.Authorization) {
+              try {
+                const session = JSON.parse(localStorage.getItem('supabase.auth.token') || '{}');
+                if (session?.access_token) {
+                  (fetchOptions as any).headers.Authorization = `Bearer ${session.access_token}`;
+                  console.log('Added auth token to request from localStorage');
+                }
+              } catch (err) {
+                console.warn('Failed to get session from localStorage:', err);
+              }
+            }
+            
             const response = await fetch(url, fetchOptions);
             
+            // Log response status and details for debugging
             console.log(`Response status for ${url}: ${response.status}`);
-            // Clone response for logging but still return original
             if (response.status >= 400) {
               try {
                 const errorText = await response.clone().text();
@@ -82,36 +100,88 @@ export const supabase = createClient<Database>(
   }
 );
 
-// Helper to check if we have a valid session
+// More robust session validation that doesn't throw errors
 export const hasValidSession = async (): Promise<boolean> => {
   try {
+    // First check localStorage for a token to avoid unnecessary network requests
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const sessionStr = localStorage.getItem('supabase.auth.token');
+        if (!sessionStr) {
+          console.log("No session found in localStorage");
+          return false;
+        }
+        
+        const sessionData = JSON.parse(sessionStr);
+        if (!sessionData?.access_token) {
+          console.log("No access token in localStorage session");
+          return false;
+        }
+        
+        // Check if token is expired
+        const expiresAt = sessionData?.expires_at;
+        if (expiresAt && expiresAt < Math.floor(Date.now() / 1000)) {
+          console.log("Session token is expired");
+          return false;
+        }
+      } catch (e) {
+        console.warn("Error checking localStorage session:", e);
+      }
+    }
+    
+    // Double-check with the server
     const { data, error } = await supabase.auth.getSession();
+    
     if (error) {
       console.error("Session validation error:", error);
       return false;
     }
-    return !!data.session;
+    
+    const isValid = !!data.session?.user && !!data.session?.access_token;
+    console.log("Session validation result:", isValid ? "Valid session" : "No valid session");
+    return isValid;
   } catch (e) {
     console.error("Failed to validate session:", e);
     return false;
   }
 };
 
-// Helper to log authentication state for debugging
+// Enhanced logging of authentication state
 export const logAuthState = async () => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    const sessionInfo = session ? {
-      user: {
-        id: session.user.id,
-        email: session.user.email,
-        has_token: !!session.access_token
-      },
-      expires_at: new Date(session.expires_at! * 1000).toISOString()
-    } : "No active session";
     
-    console.log("Auth state:", sessionInfo);
-    return !!session;
+    if (session) {
+      const expiresAt = session.expires_at 
+        ? new Date(session.expires_at * 1000).toISOString() 
+        : 'unknown';
+      
+      console.log("Auth state:", {
+        isAuthenticated: true,
+        user: {
+          id: session.user.id,
+          email: session.user.email,
+          has_access_token: !!session.access_token
+        },
+        expires_at: expiresAt,
+        current_time: new Date().toISOString()
+      });
+      
+      // Verify token is in localStorage
+      if (typeof localStorage !== 'undefined') {
+        try {
+          const localSession = localStorage.getItem('supabase.auth.token');
+          console.log("LocalStorage session exists:", !!localSession);
+        } catch (e) {
+          console.warn("Error checking localStorage:", e);
+        }
+      }
+      
+      return true;
+    } else {
+      console.log("Auth state: No active session");
+      return false;
+    }
   } catch (e) {
     console.error("Failed to log auth state:", e);
     return false;

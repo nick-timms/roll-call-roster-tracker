@@ -18,13 +18,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Set up auth state listener first
+    console.log("AuthProvider initializing...");
+    
+    // Set up auth state listener first to catch all auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (event, newSession) => {
         console.log("Auth state change event:", event);
-        setSession(session);
-        setUser(session?.user ?? null);
         
+        // Update session and user state
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+        
+        // Handle specific auth events
         if (event === 'SIGNED_IN') {
           toast({
             title: "Signed in successfully",
@@ -32,13 +37,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           });
           
           // Don't call Supabase directly in the auth callback to avoid deadlocks
+          // Use setTimeout to handle after auth changes are processed
           setTimeout(() => {
             console.log("Checking gym after sign in");
             logAuthState(); // Log auth state for debugging
             
             // Don't block on this
-            if (session?.user?.email) {
-              ensureGymExists(session.user.email).catch(err => {
+            if (newSession?.user?.email) {
+              ensureGymExists(newSession.user.email).catch(err => {
                 console.warn("Could not ensure gym exists during sign in event:", err);
               });
             }
@@ -48,6 +54,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             title: "Signed out successfully",
             description: "You have been signed out",
           });
+          
+          // Clear session data from localStorage on sign out
+          if (typeof localStorage !== 'undefined') {
+            try {
+              localStorage.removeItem('supabase.auth.token');
+              console.log("Removed session from localStorage during sign out");
+            } catch (err) {
+              console.warn("Error clearing localStorage during sign out:", err);
+            }
+          }
         } else if (event === 'TOKEN_REFRESHED') {
           console.log("Auth token refreshed");
         }
@@ -58,22 +74,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const checkSession = async () => {
       try {
         console.log("Checking for existing session...");
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session: existingSession }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error("Error checking session:", error);
           setSession(null);
           setUser(null);
         } else {
-          setSession(session);
-          setUser(session?.user ?? null);
+          console.log("Session check result:", existingSession ? "Session found" : "No session found");
+          setSession(existingSession);
+          setUser(existingSession?.user ?? null);
           
-          if (session) {
-            console.log("Existing session found for user:", session.user.email);
+          if (existingSession) {
+            console.log("Existing session found for user:", existingSession.user.email);
             // Don't block UI rendering on this
             setTimeout(() => {
-              if (session.user.email) {
-                ensureGymExists(session.user.email).catch(err => {
+              if (existingSession.user.email) {
+                ensureGymExists(existingSession.user.email).catch(err => {
                   console.warn("Could not ensure gym exists during initial session check:", err);
                 });
               }
@@ -89,6 +106,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } finally {
         setIsLoading(false);
         setAuthInitialized(true);
+        console.log("Auth provider initialization complete");
       }
     };
     
@@ -96,6 +114,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => {
       subscription.unsubscribe();
+      console.log("Auth subscription unsubscribed");
     };
   }, [toast]);
 
@@ -119,14 +138,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Check your email for a confirmation link",
       });
 
-      // After successful signup, create the gym - but don't block on it
+      // After successful signup, create the gym
       if (data.user) {
-        console.log("User created, now creating gym");
-        // Don't await this - we don't want to block the signup flow
-        createDefaultGym(email, gymName).catch(err => {
-          console.error("Background gym creation failed:", err);
-          // No toast here - we don't want to confuse the user
-        });
+        console.log("User created with ID:", data.user.id, "now creating gym");
+        try {
+          await createDefaultGym(email, gymName);
+        } catch (gymError) {
+          console.error("Gym creation failed:", gymError);
+          // Don't fail the signup process if gym creation fails
+          toast({
+            title: "Note",
+            description: "Account created but gym setup encountered an issue. Please try setting up your gym in settings later.",
+          });
+        }
       }
 
       // Auto sign in for better user experience
@@ -171,14 +195,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Log auth state for debugging
         await logAuthState();
         
-        // Always ensure the user has a gym, but don't block on it
+        // Ensure user has a gym
         try {
-          // Don't await this - we don't want to block the signin flow
-          ensureGymExists(email).catch(gymError => {
-            console.warn("Could not ensure gym exists during sign in");
-          });
+          await ensureGymExists(email);
         } catch (gymError) {
           console.error('Error ensuring gym exists:', gymError);
+          // Don't fail the signin process if this fails
         }
 
         toast({
@@ -208,6 +230,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(true);
       console.log("Signing out user...");
       
+      // Clear local state first to improve perceived performance
+      setUser(null);
+      setSession(null);
+      
       try {
         // Try to sign out with Supabase
         const { error } = await supabase.auth.signOut();
@@ -221,9 +247,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Continue with local sign out
       }
       
-      // Always clear local state regardless of Supabase response
-      setUser(null);
-      setSession(null);
+      // Manually clear session storage as a backup
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.removeItem('supabase.auth.token');
+          console.log("Removed session from localStorage during manual sign out");
+        } catch (err) {
+          console.warn("Error clearing localStorage during manual sign out:", err);
+        }
+      }
       
       toast({
         title: "Signed out",

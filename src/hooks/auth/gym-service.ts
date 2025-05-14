@@ -30,6 +30,7 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
     
     // Check if a gym already exists for this email
     try {
+      console.log("Checking if gym already exists for email:", email);
       const { data: existingGyms, error: checkError } = await supabase
         .from('gyms')
         .select('id, name, phone, company_name, address, email')
@@ -38,7 +39,9 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
       
       if (checkError) {
         console.error("Error checking for existing gym:", checkError);
-        console.error("Error details:", checkError.message, checkError.details);
+        if (checkError.code === 'PGRST116') {
+          console.error("RLS policy rejected the query - auth issue");
+        }
         return null;
       }
       
@@ -58,6 +61,14 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
     while (retryCount < MAX_RETRIES) {
       try {
         console.log(`Attempt ${retryCount + 1}: Creating new gym for email ${email}`);
+        
+        // Re-verify auth session before insert
+        const session = await supabase.auth.getSession();
+        if (!session.data.session) {
+          console.error("No valid session before inserting gym");
+          return null;
+        }
+        
         const { data: newGym, error: insertError } = await supabase
           .from('gyms')
           .insert({
@@ -70,7 +81,7 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
         if (insertError) {
           console.error(`Attempt ${retryCount + 1}: Error creating gym:`, insertError);
           
-          // Check if it's a foreign key constraint or unique violation (might mean gym was created in another request)
+          // Check if it's a foreign key constraint or unique violation
           if (insertError.code === '23505' || insertError.code === '23503') {
             // Try to fetch the gym that may have been created
             const { data: existingGym } = await supabase
@@ -83,6 +94,8 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
               console.log("Found existing gym after insert error:", existingGym);
               return existingGym as GymDetails;
             }
+          } else if (insertError.code === 'PGRST116') {
+            console.error("Row-level security prevented the insert operation");
           }
           
           retryCount++;
@@ -148,6 +161,14 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
     while (retryCount < MAX_RETRIES) {
       try {
         console.log(`Attempt ${retryCount + 1}: Checking for existing gym for email ${email}`);
+        
+        // Re-verify auth session before query
+        const session = await supabase.auth.getSession();
+        if (!session.data.session) {
+          console.error("No valid session before querying gym");
+          return null;
+        }
+        
         const { data: existingGyms, error: checkError } = await supabase
           .from('gyms')
           .select('id, name, phone, company_name, address, email')
@@ -175,6 +196,7 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
         }
         
         // If no gym exists, create one
+        console.log("No gym found, creating default gym");
         return await createDefaultGym(email, gymName);
       } catch (error) {
         console.error(`Attempt ${retryCount + 1}: Network error checking for existing gym:`, error);
@@ -223,6 +245,14 @@ export const getGymIdByEmail = async (email: string): Promise<string | null> => 
     while (retryCount < MAX_RETRIES) {
       try {
         console.log(`Attempt ${retryCount + 1}: Fetching gym ID for email ${email}`);
+        
+        // Re-verify auth session before query
+        const session = await supabase.auth.getSession();
+        if (!session.data.session) {
+          console.error("No valid session before fetching gym ID");
+          return null;
+        }
+        
         const { data, error } = await supabase
           .from('gyms')
           .select('id')
@@ -244,10 +274,15 @@ export const getGymIdByEmail = async (email: string): Promise<string | null> => 
         }
         
         if (!data) {
-          console.error("No gym found for email:", email);
-          return null;
+          console.log("No gym found for email:", email);
+          
+          // Try to create a gym if none exists
+          console.log("Attempting to create a default gym");
+          const newGym = await createDefaultGym(email);
+          return newGym?.id || null;
         }
         
+        console.log("Found gym ID:", data.id);
         return data.id;
       } catch (error) {
         console.error(`Attempt ${retryCount + 1}: Network error fetching gym ID:`, error);
