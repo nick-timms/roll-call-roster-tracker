@@ -70,7 +70,7 @@ const Layout: React.FC = () => {
                 alt="MatTrack Logo" 
                 className="h-8"
               />
-              <p className="text-xs text-zinc-500">{gymName}</p>
+              <p className="text-xs text-zinc-500"></p>
             </div>
             <div className="flex space-x-3 items-center">
               <SettingsDropdown gymName={gymName} />
