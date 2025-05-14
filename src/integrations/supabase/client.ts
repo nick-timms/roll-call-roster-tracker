@@ -16,7 +16,8 @@ export const supabase = createClient<Database>(
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      storage: localStorage
+      storage: localStorage,
+      detectSessionInUrl: true
     },
     global: {
       headers: {
@@ -42,19 +43,77 @@ export const supabase = createClient<Database>(
           }
         }, null, 2));
         
-        return fetch(url, fetchOptions)
-          .then(response => {
+        // Wrap fetch with retry logic for network issues
+        let retries = 0;
+        const maxRetries = 3;
+        const baseDelay = 500;
+        
+        const executeFetch = async (): Promise<Response> => {
+          try {
+            const response = await fetch(url, fetchOptions);
+            
             console.log(`Response status for ${url}: ${response.status}`);
+            // Clone response for logging but still return original
             if (response.status >= 400) {
-              console.error(`Error response for ${url}:`, response.statusText);
+              try {
+                const errorText = await response.clone().text();
+                console.error(`Error response for ${url}:`, response.statusText, errorText);
+              } catch (error) {
+                console.error(`Error capturing error details for ${url}:`, error);
+              }
             }
             return response;
-          })
-          .catch(error => {
+          } catch (error) {
             console.error(`Fetch error for ${url}:`, error);
+            if (retries < maxRetries) {
+              retries++;
+              const delay = baseDelay * Math.pow(2, retries - 1); // Exponential backoff
+              console.log(`Retrying in ${delay}ms (attempt ${retries} of ${maxRetries})...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              return executeFetch();
+            }
             throw error;
-          });
+          }
+        };
+        
+        return executeFetch();
       }
     }
   }
 );
+
+// Helper to check if we have a valid session
+export const hasValidSession = async (): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error("Session validation error:", error);
+      return false;
+    }
+    return !!data.session;
+  } catch (e) {
+    console.error("Failed to validate session:", e);
+    return false;
+  }
+};
+
+// Helper to log authentication state for debugging
+export const logAuthState = async () => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const sessionInfo = session ? {
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        has_token: !!session.access_token
+      },
+      expires_at: new Date(session.expires_at! * 1000).toISOString()
+    } : "No active session";
+    
+    console.log("Auth state:", sessionInfo);
+    return !!session;
+  } catch (e) {
+    console.error("Failed to log auth state:", e);
+    return false;
+  }
+};

@@ -1,7 +1,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, logAuthState } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
 import { useToast } from "@/hooks/use-toast";
 import { AuthContextType } from './types';
@@ -30,11 +30,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             title: "Signed in successfully",
             description: "Welcome to MatTrack",
           });
+          
+          // Don't call Supabase directly in the auth callback to avoid deadlocks
+          setTimeout(() => {
+            console.log("Checking gym after sign in");
+            logAuthState(); // Log auth state for debugging
+            
+            // Don't block on this
+            if (session?.user?.email) {
+              ensureGymExists(session.user.email).catch(err => {
+                console.warn("Could not ensure gym exists during sign in event:", err);
+              });
+            }
+          }, 0);
         } else if (event === 'SIGNED_OUT') {
           toast({
             title: "Signed out successfully",
             description: "You have been signed out",
           });
+        } else if (event === 'TOKEN_REFRESHED') {
+          console.log("Auth token refreshed");
         }
       }
     );
@@ -42,11 +57,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Then check for existing session
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        setUser(session?.user ?? null);
+        console.log("Checking for existing session...");
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error("Error checking session:", error);
+          setSession(null);
+          setUser(null);
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+          
+          if (session) {
+            console.log("Existing session found for user:", session.user.email);
+            // Don't block UI rendering on this
+            setTimeout(() => {
+              if (session.user.email) {
+                ensureGymExists(session.user.email).catch(err => {
+                  console.warn("Could not ensure gym exists during initial session check:", err);
+                });
+              }
+            }, 0);
+          } else {
+            console.log("No existing session found");
+          }
+        }
       } catch (error) {
-        console.error("Error checking session:", error);
+        console.error("Exception checking session:", error);
+        setSession(null);
+        setUser(null);
       } finally {
         setIsLoading(false);
         setAuthInitialized(true);
@@ -68,6 +107,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { error, data } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+        }
       });
       
       if (error) throw error;
@@ -81,7 +123,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (data.user) {
         console.log("User created, now creating gym");
         // Don't await this - we don't want to block the signup flow
-        ensureGymExists(email, gymName).catch(err => {
+        createDefaultGym(email, gymName).catch(err => {
           console.error("Background gym creation failed:", err);
           // No toast here - we don't want to confuse the user
         });
@@ -91,8 +133,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (data.user) {
         try {
           await signIn(email, password);
-        } catch (signInError) {
+        } catch (signInError: any) {
           console.error("Failed to auto-sign in after signup:", signInError);
+          toast({
+            title: "Sign in required",
+            description: "Please sign in with your new account",
+          });
           navigate('/login', { replace: true });
         }
       }
@@ -122,6 +168,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       // Only redirect if the sign-in was successful
       if (data.session) {
+        // Log auth state for debugging
+        await logAuthState();
+        
         // Always ensure the user has a gym, but don't block on it
         try {
           // Don't await this - we don't want to block the signin flow
@@ -132,6 +181,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           console.error('Error ensuring gym exists:', gymError);
         }
 
+        toast({
+          title: "Signed in successfully",
+          description: "Welcome back!",
+        });
+        
         // Navigate after a short delay to ensure state is updated
         setTimeout(() => {
           navigate('/dashboard', { replace: true });

@@ -1,8 +1,15 @@
 
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, hasValidSession, logAuthState } from "@/integrations/supabase/client";
 import { GymDetails } from "./types";
 
-export const createDefaultGym = async (email: string, gymName: string = 'My Gym') => {
+// Maximum retry counts for database operations
+const MAX_RETRIES = 3;
+const BASE_DELAY = 500; // Base delay in milliseconds for exponential backoff
+
+/**
+ * Creates a default gym for a user
+ */
+export const createDefaultGym = async (email: string, gymName: string = 'My Gym'): Promise<GymDetails | null> => {
   try {
     if (!email) {
       console.error("Cannot create gym: No email provided");
@@ -11,12 +18,15 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
     
     console.log("Creating default gym for:", email);
     
-    // Get the current session to verify authentication
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      console.error("Error creating gym: No active session");
+    // Validate session before proceeding
+    const isAuthenticated = await hasValidSession();
+    if (!isAuthenticated) {
+      console.error("Error creating gym: No valid session");
       return null;
     }
+    
+    // Log auth state for debugging
+    await logAuthState();
     
     // Check if a gym already exists for this email
     try {
@@ -35,7 +45,7 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
       // If gym already exists, return it
       if (existingGyms) {
         console.log("Gym already exists:", existingGyms);
-        return existingGyms;
+        return existingGyms as GymDetails;
       }
     } catch (error) {
       console.error("Network error checking for existing gym:", error);
@@ -44,10 +54,10 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
 
     // Create a new gym with retry logic
     let retryCount = 0;
-    const maxRetries = 3;
     
-    while (retryCount < maxRetries) {
+    while (retryCount < MAX_RETRIES) {
       try {
+        console.log(`Attempt ${retryCount + 1}: Creating new gym for email ${email}`);
         const { data: newGym, error: insertError } = await supabase
           .from('gyms')
           .insert({
@@ -59,27 +69,47 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
         
         if (insertError) {
           console.error(`Attempt ${retryCount + 1}: Error creating gym:`, insertError);
+          
+          // Check if it's a foreign key constraint or unique violation (might mean gym was created in another request)
+          if (insertError.code === '23505' || insertError.code === '23503') {
+            // Try to fetch the gym that may have been created
+            const { data: existingGym } = await supabase
+              .from('gyms')
+              .select('id, name, phone, company_name, address, email')
+              .eq('email', email)
+              .maybeSingle();
+              
+            if (existingGym) {
+              console.log("Found existing gym after insert error:", existingGym);
+              return existingGym as GymDetails;
+            }
+          }
+          
           retryCount++;
-          if (retryCount >= maxRetries) {
+          if (retryCount >= MAX_RETRIES) {
             console.error("Max retries reached. Failed to create gym.");
             return null;
           }
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Wait before retrying with exponential backoff
+          const delay = BASE_DELAY * Math.pow(2, retryCount - 1);
+          await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
         
         console.log("Created new gym:", newGym);
-        return newGym;
+        return newGym as GymDetails;
       } catch (error) {
         console.error(`Attempt ${retryCount + 1}: Network error creating gym:`, error);
         retryCount++;
-        if (retryCount >= maxRetries) {
+        if (retryCount >= MAX_RETRIES) {
           console.error("Max retries reached. Failed to create gym.");
           return null;
         }
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Wait before retrying with exponential backoff
+        const delay = BASE_DELAY * Math.pow(2, retryCount - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
     
@@ -90,7 +120,10 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
   }
 };
 
-export const ensureGymExists = async (email: string, gymName: string = 'My Gym') => {
+/**
+ * Ensures a gym exists for a user, creating one if needed
+ */
+export const ensureGymExists = async (email: string, gymName: string = 'My Gym'): Promise<GymDetails | null> => {
   try {
     if (!email) {
       console.error("Cannot ensure gym exists: No email provided");
@@ -99,19 +132,22 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
 
     console.log("Ensuring gym exists for:", email);
     
-    // Get the current session to verify authentication
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      console.error("Error ensuring gym exists: No active session");
+    // Validate session before proceeding
+    const isAuthenticated = await hasValidSession();
+    if (!isAuthenticated) {
+      console.error("Error ensuring gym exists: No valid session");
       return null;
     }
     
+    // Log auth state for debugging
+    await logAuthState();
+    
     // Check if a gym already exists for this email with retry logic
     let retryCount = 0;
-    const maxRetries = 3;
     
-    while (retryCount < maxRetries) {
+    while (retryCount < MAX_RETRIES) {
       try {
+        console.log(`Attempt ${retryCount + 1}: Checking for existing gym for email ${email}`);
         const { data: existingGyms, error: checkError } = await supabase
           .from('gyms')
           .select('id, name, phone, company_name, address, email')
@@ -121,12 +157,14 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
         if (checkError) {
           console.error(`Attempt ${retryCount + 1}: Error checking for existing gym:`, checkError);
           retryCount++;
-          if (retryCount >= maxRetries) {
+          if (retryCount >= MAX_RETRIES) {
             console.error("Max retries reached. Failed to check for existing gym.");
             return null;
           }
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Wait before retrying with exponential backoff
+          const delay = BASE_DELAY * Math.pow(2, retryCount - 1);
+          await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
         
@@ -137,16 +175,18 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
         }
         
         // If no gym exists, create one
-        return await createDefaultGym(email, gymName) as GymDetails | null;
+        return await createDefaultGym(email, gymName);
       } catch (error) {
         console.error(`Attempt ${retryCount + 1}: Network error checking for existing gym:`, error);
         retryCount++;
-        if (retryCount >= maxRetries) {
+        if (retryCount >= MAX_RETRIES) {
           console.error("Max retries reached. Failed to check for existing gym.");
           return null;
         }
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Wait before retrying with exponential backoff
+        const delay = BASE_DELAY * Math.pow(2, retryCount - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
     
@@ -157,7 +197,9 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
   }
 };
 
-// Helper function to get gym ID by email
+/**
+ * Helper function to get gym ID by email with improved error handling
+ */
 export const getGymIdByEmail = async (email: string): Promise<string | null> => {
   try {
     if (!email) {
@@ -165,19 +207,22 @@ export const getGymIdByEmail = async (email: string): Promise<string | null> => 
       return null;
     }
     
-    // Get the current session to verify authentication
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      console.error("Error getting gym ID: No active session");
+    // Validate session before proceeding
+    const isAuthenticated = await hasValidSession();
+    if (!isAuthenticated) {
+      console.error("Error getting gym ID: No valid session");
       return null;
     }
     
+    // Log auth state for debugging
+    await logAuthState();
+    
     // Add retry logic for fetching gym ID
     let retryCount = 0;
-    const maxRetries = 3;
     
-    while (retryCount < maxRetries) {
+    while (retryCount < MAX_RETRIES) {
       try {
+        console.log(`Attempt ${retryCount + 1}: Fetching gym ID for email ${email}`);
         const { data, error } = await supabase
           .from('gyms')
           .select('id')
@@ -187,12 +232,14 @@ export const getGymIdByEmail = async (email: string): Promise<string | null> => 
         if (error) {
           console.error(`Attempt ${retryCount + 1}: Error fetching gym ID:`, error);
           retryCount++;
-          if (retryCount >= maxRetries) {
+          if (retryCount >= MAX_RETRIES) {
             console.error("Max retries reached. Failed to fetch gym ID.");
             return null;
           }
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Wait before retrying with exponential backoff
+          const delay = BASE_DELAY * Math.pow(2, retryCount - 1);
+          await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
         
@@ -205,12 +252,14 @@ export const getGymIdByEmail = async (email: string): Promise<string | null> => 
       } catch (error) {
         console.error(`Attempt ${retryCount + 1}: Network error fetching gym ID:`, error);
         retryCount++;
-        if (retryCount >= maxRetries) {
+        if (retryCount >= MAX_RETRIES) {
           console.error("Max retries reached. Failed to fetch gym ID.");
           return null;
         }
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Wait before retrying with exponential backoff
+        const delay = BASE_DELAY * Math.pow(2, retryCount - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
     
