@@ -154,13 +154,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(true);
       console.log("Signing out user...");
       
-      // Clear user and session state first for immediate UI feedback
-      setUser(null);
-      setSession(null);
-      
       const { error } = await supabase.auth.signOut();
       
       if (error) throw error;
+      
+      // Clear user and session state after successful signOut
+      setUser(null);
+      setSession(null);
       
       toast({
         title: "Signed out",
@@ -173,7 +173,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error during sign out:", error);
       toast({
         title: "Error signing out",
-        description: error.message,
+        description: error.message || "Failed to sign out",
         variant: "destructive",
       });
     } finally {

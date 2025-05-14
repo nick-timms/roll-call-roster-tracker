@@ -200,7 +200,7 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
                 </PopoverContent>
               </Popover>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleLogout} className="text-red-500">
+            <DropdownMenuItem onClick={handleLogout} className="text-red-500 cursor-pointer">
               <LogOut className="mr-2 h-4 w-4" />
               <span>Log Out</span>
             </DropdownMenuItem>
