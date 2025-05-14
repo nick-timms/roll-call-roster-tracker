@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -56,7 +55,6 @@ const MembersPage: React.FC = () => {
       try {
         // Log supabase client state for debugging
         console.log("Supabase client state:", {
-          url: supabase.url || "URL not available",
           authHeaders: session ? "Auth headers present" : "No auth headers",
           userSession: session ? "Session exists" : "No session"
         });
@@ -113,7 +111,6 @@ const MembersPage: React.FC = () => {
         
         console.log("Submitting new member to Supabase:", newMember);
         console.log("Supabase client config:", {
-          url: supabase.url || "URL not available",
           headers: session ? "Auth headers present" : "No auth headers"
         });
         
