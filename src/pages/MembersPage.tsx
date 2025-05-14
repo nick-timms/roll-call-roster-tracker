@@ -54,8 +54,8 @@ const MembersPage: React.FC = () => {
     queryKey: ['gym'],
     queryFn: async () => {
       if (!user?.email) {
-        console.log("No user email found, using default gym");
-        return { id: 'default', name: 'My Gym', email: user?.email || 'unknown' };
+        console.log("No user email found, cannot fetch gym data");
+        throw new Error("User email is required to fetch gym data");
       }
       
       try {
@@ -67,7 +67,8 @@ const MembersPage: React.FC = () => {
         
         if (error) {
           console.error('Error fetching gym:', error);
-          return { id: 'default', name: 'My Gym', email: user.email };
+          // Instead of returning a default object, throw an error so we can handle it properly
+          throw new Error(`Failed to fetch gym: ${error.message}`);
         }
         
         if (!data) {
@@ -78,7 +79,7 @@ const MembersPage: React.FC = () => {
             return newGym;
           } catch (e) {
             console.error('Failed to create default gym:', e);
-            return { id: 'default', name: 'My Gym', email: user.email };
+            throw e;
           }
         }
         
@@ -86,12 +87,19 @@ const MembersPage: React.FC = () => {
         return data;
       } catch (e) {
         console.error("Exception fetching gym:", e);
-        return { id: 'default', name: 'My Gym', email: user?.email || 'unknown' };
+        throw e;
       }
     },
     enabled: !!user, // Only run if user is authenticated
     retry: 1,
     staleTime: 60000,
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Could not load gym data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
+    }
   });
   
   // Fetch members data with improved error handling
@@ -99,10 +107,9 @@ const MembersPage: React.FC = () => {
     queryKey: ['members', gymData?.id],
     queryFn: async () => {
       try {
-        // If we're using a default gym, just return an empty array
-        if (!gymData?.id || gymData.id === 'default') {
-          console.log("Using default gym, returning empty members list");
-          return [];
+        if (!gymData?.id) {
+          console.log("No gym ID found, cannot fetch members");
+          throw new Error("Gym ID is required to fetch members");
         }
         
         const { data, error } = await supabase
@@ -112,7 +119,7 @@ const MembersPage: React.FC = () => {
         
         if (error) {
           console.error('Error fetching members:', error);
-          return [];
+          throw new Error(`Failed to fetch members: ${error.message}`);
         }
         
         // Transform database columns to our frontend model
@@ -130,10 +137,17 @@ const MembersPage: React.FC = () => {
         }));
       } catch (e) {
         console.error("Exception fetching members:", e);
-        return [];
+        throw e;
       }
     },
-    enabled: !!gymData && !!user, // Only run if gym data is available and user is authenticated
+    enabled: !!gymData?.id && !!user, // Only run if gym data is available and user is authenticated
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Could not load members: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
+    }
   });
   
   // Add member mutation with improved database writing
@@ -152,60 +166,105 @@ const MembersPage: React.FC = () => {
 
         console.log("Starting member addition process");
         
-        // First ensure we have a gym - try to use existing gym or create a default one
-        let gymId = gymData?.id;
-        
-        if (!gymId || gymId === 'default') {
-          console.log("No gym ID found, creating a default gym");
+        // Ensure we have a valid gym ID
+        if (!gymData?.id) {
+          console.log("No gym ID found, creating a new gym");
           const newGym = await createDefaultGym(user.email);
-          gymId = newGym.id;
-          console.log("Created new gym with ID:", gymId);
+          
+          if (!newGym?.id) {
+            throw new Error("Failed to create or retrieve a valid gym ID");
+          }
+          
+          console.log("Created new gym with ID:", newGym.id);
           
           // Refresh gym data
           queryClient.invalidateQueries({ queryKey: ['gym'] });
+          
+          // Generate QR code for the member
+          const qrCode = generateQRCode(crypto.randomUUID());
+          
+          console.log(`Adding member to gym: ${newGym.id}`);
+          
+          // Insert the member into the database
+          const { data, error } = await supabase
+            .from('members')
+            .insert({
+              gym_id: newGym.id, // Use the newly created gym ID
+              first_name: member.firstName,
+              last_name: member.lastName,
+              email: member.email,
+              phone: member.phone,
+              membership_type: member.membershipType,
+              belt: member.belt,
+              qr_code: qrCode,
+            })
+            .select()
+            .single();
+          
+          if (error) {
+            console.error("Database error inserting member:", error);
+            throw error;
+          }
+          
+          console.log("Member inserted successfully:", data);
+          
+          // Return the member with our application's data model format
+          return {
+            id: data.id,
+            gymId: data.gym_id,
+            firstName: data.first_name,
+            lastName: data.last_name,
+            email: data.email,
+            phone: data.phone || '',
+            membershipType: data.membership_type || 'Standard',
+            belt: data.belt || '',
+            qrCode: data.qr_code,
+            createdAt: data.created_at
+          };
+        } else {
+          // We have a valid gym ID, proceed with member addition
+          console.log(`Adding member to existing gym: ${gymData.id}`);
+          
+          // Generate QR code for the member
+          const qrCode = generateQRCode(crypto.randomUUID());
+          
+          // Insert the member into the database
+          const { data, error } = await supabase
+            .from('members')
+            .insert({
+              gym_id: gymData.id,
+              first_name: member.firstName,
+              last_name: member.lastName,
+              email: member.email,
+              phone: member.phone,
+              membership_type: member.membershipType,
+              belt: member.belt,
+              qr_code: qrCode,
+            })
+            .select()
+            .single();
+          
+          if (error) {
+            console.error("Database error inserting member:", error);
+            throw error;
+          }
+          
+          console.log("Member inserted successfully:", data);
+          
+          // Return the member with our application's data model format
+          return {
+            id: data.id,
+            gymId: data.gym_id,
+            firstName: data.first_name,
+            lastName: data.last_name,
+            email: data.email,
+            phone: data.phone || '',
+            membershipType: data.membership_type || 'Standard',
+            belt: data.belt || '',
+            qrCode: data.qr_code,
+            createdAt: data.created_at
+          };
         }
-        
-        // Generate QR code for the member
-        const qrCode = generateQRCode(crypto.randomUUID());
-        
-        console.log(`Adding member to gym: ${gymId}`);
-        
-        // Insert the member into the database
-        const { data, error } = await supabase
-          .from('members')
-          .insert({
-            gym_id: gymId,
-            first_name: member.firstName,
-            last_name: member.lastName,
-            email: member.email,
-            phone: member.phone,
-            membership_type: member.membershipType,
-            belt: member.belt,
-            qr_code: qrCode,
-          })
-          .select()
-          .single();
-        
-        if (error) {
-          console.error("Database error inserting member:", error);
-          throw error;
-        }
-        
-        console.log("Member inserted successfully:", data);
-        
-        // Return the member with our application's data model format
-        return {
-          id: data.id,
-          gymId: data.gym_id,
-          firstName: data.first_name,
-          lastName: data.last_name,
-          email: data.email,
-          phone: data.phone || '',
-          membershipType: data.membership_type || 'Standard',
-          belt: data.belt || '',
-          qrCode: data.qr_code,
-          createdAt: data.created_at
-        };
       } catch (e) {
         console.error("Exception adding member:", e);
         throw e;
@@ -238,7 +297,7 @@ const MembersPage: React.FC = () => {
       console.error('Error adding member:', error);
       toast({
         title: "Error",
-        description: "There was a problem adding the member. Please try again.",
+        description: `Failed to add member: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive"
       });
     }
