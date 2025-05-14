@@ -10,6 +10,13 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
     
     console.log("Creating default gym for:", email);
     
+    // Get the current session to verify authentication
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      console.error("Error creating gym: No active session");
+      return null;
+    }
+    
     // Check if a gym already exists for this email
     try {
       const { data: existingGyms, error: checkError } = await supabase
@@ -33,39 +40,49 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
       console.error("Network error checking for existing gym:", error);
       return null;
     }
+
+    // Create a new gym with retry logic
+    let retryCount = 0;
+    const maxRetries = 3;
     
-    // Get the current session to verify authentication
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      console.error("Error creating gym: No active session");
-      return null;
-    }
-    
-    console.log("Creating gym with auth token:", session.access_token ? "Token present" : "No token");
-    
-    // Create a new gym
-    try {
-      const { data: newGym, error: insertError } = await supabase
-        .from('gyms')
-        .insert({
-          email: email,
-          name: gymName
-        })
-        .select()
-        .single();
-      
-      if (insertError) {
-        console.error("Error creating gym:", insertError);
-        console.error("Error details:", insertError.message, insertError.details);
-        return null;
+    while (retryCount < maxRetries) {
+      try {
+        const { data: newGym, error: insertError } = await supabase
+          .from('gyms')
+          .insert({
+            email: email,
+            name: gymName
+          })
+          .select()
+          .single();
+        
+        if (insertError) {
+          console.error(`Attempt ${retryCount + 1}: Error creating gym:`, insertError);
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            console.error("Max retries reached. Failed to create gym.");
+            return null;
+          }
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        
+        console.log("Created new gym:", newGym);
+        return newGym;
+      } catch (error) {
+        console.error(`Attempt ${retryCount + 1}: Network error creating gym:`, error);
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          console.error("Max retries reached. Failed to create gym.");
+          return null;
+        }
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      
-      console.log("Created new gym:", newGym);
-      return newGym;
-    } catch (error) {
-      console.error("Network error creating gym:", error);
-      return null;
     }
+    
+    return null;
   } catch (error) {
     console.error("Error in createDefaultGym:", error);
     return null;
@@ -88,34 +105,51 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
       return null;
     }
     
-    console.log("Checking gym with auth token:", session.access_token ? "Token present" : "No token");
+    // Check if a gym already exists for this email with retry logic
+    let retryCount = 0;
+    const maxRetries = 3;
     
-    // Check if a gym already exists for this email
-    try {
-      const { data: existingGyms, error: checkError } = await supabase
-        .from('gyms')
-        .select('id, name')
-        .eq('email', email)
-        .maybeSingle();
-      
-      if (checkError) {
-        console.error("Error checking for existing gym:", checkError);
-        console.error("Error details:", checkError.message, checkError.details);
-        return null;
+    while (retryCount < maxRetries) {
+      try {
+        const { data: existingGyms, error: checkError } = await supabase
+          .from('gyms')
+          .select('id, name, phone, company_name, address')
+          .eq('email', email)
+          .maybeSingle();
+        
+        if (checkError) {
+          console.error(`Attempt ${retryCount + 1}: Error checking for existing gym:`, checkError);
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            console.error("Max retries reached. Failed to check for existing gym.");
+            return null;
+          }
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        
+        // If gym already exists, return it
+        if (existingGyms) {
+          console.log("Gym already exists:", existingGyms);
+          return existingGyms;
+        }
+        
+        // If no gym exists, create one
+        return await createDefaultGym(email, gymName);
+      } catch (error) {
+        console.error(`Attempt ${retryCount + 1}: Network error checking for existing gym:`, error);
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          console.error("Max retries reached. Failed to check for existing gym.");
+          return null;
+        }
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      
-      // If gym already exists, return it
-      if (existingGyms) {
-        console.log("Gym already exists:", existingGyms);
-        return existingGyms;
-      }
-    } catch (error) {
-      console.error("Network error checking for existing gym:", error);
-      return null;
     }
     
-    // If no gym exists, create one
-    return await createDefaultGym(email, gymName);
+    return null;
   } catch (error) {
     console.error("Error in ensureGymExists:", error);
     return null;
@@ -137,23 +171,49 @@ export const getGymIdByEmail = async (email: string): Promise<string | null> => 
       return null;
     }
     
-    const { data, error } = await supabase
-      .from('gyms')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
+    // Add retry logic for fetching gym ID
+    let retryCount = 0;
+    const maxRetries = 3;
     
-    if (error) {
-      console.error("Error fetching gym ID:", error);
-      return null;
+    while (retryCount < maxRetries) {
+      try {
+        const { data, error } = await supabase
+          .from('gyms')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+        
+        if (error) {
+          console.error(`Attempt ${retryCount + 1}: Error fetching gym ID:`, error);
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            console.error("Max retries reached. Failed to fetch gym ID.");
+            return null;
+          }
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        
+        if (!data) {
+          console.error("No gym found for email:", email);
+          return null;
+        }
+        
+        return data.id;
+      } catch (error) {
+        console.error(`Attempt ${retryCount + 1}: Network error fetching gym ID:`, error);
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          console.error("Max retries reached. Failed to fetch gym ID.");
+          return null;
+        }
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
     
-    if (!data) {
-      console.error("No gym found for email:", email);
-      return null;
-    }
-    
-    return data.id;
+    return null;
   } catch (error) {
     console.error("Error in getGymIdByEmail:", error);
     return null;

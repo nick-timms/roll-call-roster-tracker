@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Settings } from 'lucide-react';
 import { useAuth } from '@/hooks/auth/use-auth';
 import { supabase } from '@/integrations/supabase/client';
+import { ensureGymExists } from '@/hooks/auth/gym-service';
 
 interface GymDetails {
   id: string;
@@ -20,8 +21,10 @@ interface GymDetails {
 
 const GymSettingsPage: React.FC = () => {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
   const [gymDetails, setGymDetails] = useState<GymDetails>({
     id: '',
     name: 'My Gym',
@@ -32,15 +35,42 @@ const GymSettingsPage: React.FC = () => {
   });
   
   useEffect(() => {
-    fetchGymDetails();
-  }, [user]);
+    if (user?.email && session) {
+      fetchGymDetails();
+    }
+  }, [user, session]);
 
   const fetchGymDetails = async () => {
-    if (!user?.email) return;
+    if (!user?.email || !session) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to access gym settings",
+        variant: "destructive"
+      });
+      return;
+    }
     
     try {
       setIsLoading(true);
+      setHasAttemptedFetch(true);
       
+      // First try using the ensureGymExists function which handles retries internally
+      const gymData = await ensureGymExists(user.email);
+      
+      if (gymData) {
+        console.log("Found gym details using ensureGymExists:", gymData);
+        setGymDetails({
+          id: gymData.id || '',
+          name: gymData.name || 'My Gym',
+          phone: gymData.phone || '',
+          company_name: gymData.company_name || '',
+          address: gymData.address || '',
+          email: user.email
+        });
+        return;
+      }
+      
+      // Fallback to direct query if needed
       const { data: gyms, error } = await supabase
         .from('gyms')
         .select('id, name, phone, company_name, address, email')
@@ -51,7 +81,7 @@ const GymSettingsPage: React.FC = () => {
         console.error('Error fetching gym details:', error);
         toast({
           title: "Error",
-          description: "Failed to load gym settings",
+          description: "Failed to load gym settings. Please try again.",
           variant: "destructive"
         });
         return;
@@ -65,27 +95,64 @@ const GymSettingsPage: React.FC = () => {
           phone: gyms.phone || '',
           company_name: gyms.company_name || '',
           address: gyms.address || '',
-          email: gyms.email || user.email || ''
+          email: gyms.email || user.email
         });
       } else {
-        console.log("No gym found, using default values");
+        console.log("No gym found via direct query, creating new one");
+        
+        // Create a new gym
+        const { data: newGym, error: insertError } = await supabase
+          .from('gyms')
+          .insert({ 
+            email: user.email,
+            name: 'My Gym' 
+          })
+          .select()
+          .single();
+          
+        if (insertError) {
+          console.error("Error creating gym:", insertError);
+          toast({
+            title: "Error",
+            description: "Failed to create gym profile. Please try again.",
+            variant: "destructive"
+          });
+          return;
+        }
+        
+        if (newGym) {
+          setGymDetails({
+            id: newGym.id,
+            name: newGym.name,
+            phone: newGym.phone || '',
+            company_name: newGym.company_name || '',
+            address: newGym.address || '',
+            email: newGym.email
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to fetch gym details:', error);
       toast({
-        title: "Error",
-        description: "Could not connect to the database",
+        title: "Connection Error",
+        description: "Could not connect to the database. Try refreshing the page.",
         variant: "destructive"
       });
     } finally {
       setIsLoading(false);
+      setIsRetrying(false);
     }
   };
 
+  const handleRetry = () => {
+    setIsRetrying(true);
+    fetchGymDetails();
+  };
+
   const handleSaveChanges = async () => {
-    if (!user?.email) {
+    if (!user?.email || !session) {
       toast({
-        title: "Error",
+        title: "Authentication Required",
         description: "You must be logged in to update settings",
         variant: "destructive"
       });
@@ -147,7 +214,11 @@ const GymSettingsPage: React.FC = () => {
           throw insertError;
         }
         
-        setGymDetails(newGym);
+        setGymDetails(prev => ({
+          ...prev,
+          id: newGym.id
+        }));
+        
         toast({
           title: "Success",
           description: "Gym created successfully",
@@ -165,10 +236,30 @@ const GymSettingsPage: React.FC = () => {
     }
   };
   
+  if (!session || !user) {
+    return (
+      <div className="space-y-6 pb-16">
+        <div className="flex items-center justify-center h-40">
+          <p className="text-zinc-500">Please log in to access gym settings</p>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="space-y-6 pb-16">
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
         <h1 className="text-2xl font-bold text-zinc-900">Gym Settings</h1>
+        
+        {hasAttemptedFetch && !gymDetails.id && !isLoading && (
+          <Button 
+            onClick={handleRetry} 
+            variant="outline"
+            disabled={isRetrying}
+          >
+            {isRetrying ? "Retrying..." : "Retry Connection"}
+          </Button>
+        )}
       </div>
       
       <Card className="border-zinc-200 shadow-sm">
