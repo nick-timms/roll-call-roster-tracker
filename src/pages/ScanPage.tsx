@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { QrReader } from 'react-qr-reader';
+import QrScanner from 'react-qr-scanner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -39,14 +40,10 @@ const ScanPage: React.FC = () => {
     setScanning(false);
   };
 
-  const handleScan = (result: any, error?: any) => {
-    if (!!result) {
-      setScanResult(result?.text);
+  const handleScan = (data: any) => {
+    if (data) {
+      setScanResult(data.text);
       setScanning(false);
-    }
-
-    if (!!error) {
-      console.info(error);
     }
   };
 
@@ -78,10 +75,10 @@ const ScanPage: React.FC = () => {
         <CardContent>
           {scanning ? (
             <>
-              <QrReader
+              <QrScanner
                 delay={300}
                 onError={handleError}
-                onResult={handleScan}
+                onScan={handleScan}
                 style={{ width: '100%' }}
               />
               <Button onClick={stopScanning} className="w-full mt-4 bg-red-500 hover:bg-red-700 text-white">

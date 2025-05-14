@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -24,34 +25,34 @@ const MemberDetailPage: React.FC = () => {
     // Mock data for demonstration purposes
     const mockMember: Member = {
       id: memberId || '1',
-      first_name: 'John',
-      last_name: 'Doe',
+      firstName: 'John',
+      lastName: 'Doe',
       email: 'john.doe@example.com',
-      gym_id: 'gym123',
-      qr_code: 'qr123',
-      membership_type: 'Monthly',
-      membership_status: 'Active',
-      date_of_birth: '1990-01-01',
+      gymId: 'gym123',
+      qrCode: 'qr123',
+      membershipType: 'Monthly',
+      membershipStatus: 'Active',
+      dateOfBirth: '1990-01-01',
       address: '123 Main St',
-      phone_number: '555-1234',
-      emergency_contact_name: 'Jane Doe',
-      emergency_contact_phone: '555-5678',
+      phoneNumber: '555-1234',
+      emergencyContactName: 'Jane Doe',
+      emergencyContactPhone: '555-5678',
       notes: 'Regular attendee',
-      created_at: '2023-01-01',
+      createdAt: '2023-01-01',
     };
 
     const mockAttendance: AttendanceRecord[] = [
       {
         id: 'attendance1',
-        member_id: memberId || '1',
-        check_in_time: '2023-10-26 08:00:00',
-        check_out_time: '2023-10-26 09:00:00',
+        memberId: memberId || '1',
+        checkInTime: '2023-10-26 08:00:00',
+        checkOutTime: '2023-10-26 09:00:00',
       },
       {
         id: 'attendance2',
-        member_id: memberId || '1',
-        check_in_time: '2023-10-27 09:00:00',
-        check_out_time: '2023-10-27 10:00:00',
+        memberId: memberId || '1',
+        checkInTime: '2023-10-27 09:00:00',
+        checkOutTime: '2023-10-27 10:00:00',
       },
     ];
 
@@ -127,8 +128,8 @@ const MemberDetailPage: React.FC = () => {
                   <Input
                     type="text"
                     id="firstName"
-                    name="first_name"
-                    value={editedMember?.first_name || ''}
+                    name="firstName"
+                    value={editedMember?.firstName || ''}
                     onChange={handleInputChange}
                     disabled={!isEditing}
                     className="col-span-3"
@@ -141,8 +142,8 @@ const MemberDetailPage: React.FC = () => {
                   <Input
                     type="text"
                     id="lastName"
-                    name="last_name"
-                    value={editedMember?.last_name || ''}
+                    name="lastName"
+                    value={editedMember?.lastName || ''}
                     onChange={handleInputChange}
                     disabled={!isEditing}
                     className="col-span-3"
@@ -167,7 +168,7 @@ const MemberDetailPage: React.FC = () => {
                     Membership Type
                   </Label>
                   <Select
-                    onValueChange={(value) => handleSelectChange(value, "membership_type")}
+                    onValueChange={(value) => handleSelectChange(value, "membershipType")}
                   >
                     <SelectTrigger className="col-span-3">
                       <SelectValue placeholder="Select a membership type" />
@@ -184,7 +185,7 @@ const MemberDetailPage: React.FC = () => {
                     Membership Status
                   </Label>
                   <Select
-                    onValueChange={(value) => handleSelectChange(value, "membership_status")}
+                    onValueChange={(value) => handleSelectChange(value, "membershipStatus")}
                   >
                     <SelectTrigger className="col-span-3">
                       <SelectValue placeholder="Select a membership status" />
@@ -203,7 +204,7 @@ const MemberDetailPage: React.FC = () => {
               <ul>
                 {attendance.map((record) => (
                   <li key={record.id} className="py-2">
-                    Check-in: {record.check_in_time}, Check-out: {record.check_out_time}
+                    Check-in: {record.checkInTime}, Check-out: {record.checkOutTime}
                   </li>
                 ))}
               </ul>

@@ -1,9 +1,8 @@
-
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
-import { toast } from '@/components/ui/toaster';
+import { useToast } from "@/hooks/use-toast";
 import { AuthContextType } from './types';
 import { ensureGymExists, createDefaultGym } from './gym-service';
 
