@@ -136,12 +136,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           }
         }
         
-        // Always navigate to dashboard after successful sign in
-        navigate('/dashboard');
+        // Navigate to dashboard with a slight delay to ensure state updates
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 100);
       } catch (error) {
         console.error('Failed during gym check/creation:', error);
         // Still navigate to dashboard even if gym check fails
-        navigate('/dashboard');
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 100);
       }
     } catch (error: any) {
       toast({

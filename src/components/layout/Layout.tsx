@@ -20,7 +20,7 @@ const Layout: React.FC = () => {
   const { toast } = useToast();
   const { user, signOut } = useAuth();
   const [gymName, setGymName] = useState('Your Gym');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   
   useEffect(() => {
     const fetchGymDetails = async () => {
