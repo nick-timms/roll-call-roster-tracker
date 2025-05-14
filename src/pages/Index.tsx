@@ -14,15 +14,17 @@ const Index = () => {
     
     if (!user) {
       navigate('/login');
-      return;
+    } else {
+      navigate('/dashboard');
     }
-    
-    // User is authenticated, redirect directly to dashboard
-    navigate('/dashboard');
-    
   }, [user, navigate, isLoading]);
   
-  return null; // This component doesn't render anything, it's just for redirection
+  // Return a loading indicator while auth state is being determined
+  return (
+    <div className="flex h-screen items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+    </div>
+  );
 };
 
 export default Index;

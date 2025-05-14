@@ -69,6 +69,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Check your email for a confirmation link",
       });
 
+      // Create default gym for the new user
+      try {
+        const { error: gymError } = await supabase
+          .from('gyms')
+          .insert({
+            name: 'My Gym',
+            email: email,
+          });
+          
+        if (gymError) {
+          console.error('Error creating default gym:', gymError);
+        }
+      } catch (createGymError) {
+        console.error('Failed to create default gym:', createGymError);
+      }
+
       // Auto sign in for better user experience
       await signIn(email, password);
     } catch (error: any) {
@@ -89,6 +105,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
       
       if (error) throw error;
+      
+      // Check if user has a gym, if not create a default one
+      try {
+        const { data: gyms, error: fetchError } = await supabase
+          .from('gyms')
+          .select('id')
+          .eq('email', email)
+          .limit(1);
+          
+        if (fetchError) {
+          console.error('Error checking for gym:', fetchError);
+        }
+
+        if (!gyms || gyms.length === 0) {
+          const { error: gymError } = await supabase
+            .from('gyms')
+            .insert({
+              name: 'My Gym',
+              email: email,
+            });
+            
+          if (gymError) {
+            console.error('Error creating default gym:', gymError);
+          } else {
+            toast({
+              title: 'Default gym created',
+              description: 'You can change the name in Account settings.'
+            });
+          }
+        }
+      } catch (createGymError) {
+        console.error('Failed to create default gym:', createGymError);
+      }
       
       navigate('/dashboard');
     } catch (error: any) {

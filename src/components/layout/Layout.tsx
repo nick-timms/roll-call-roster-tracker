@@ -25,19 +25,23 @@ const Layout: React.FC = () => {
     const fetchGymDetails = async () => {
       if (!user) return;
       
-      const { data: gyms, error } = await supabase
-        .from('gyms')
-        .select('name')
-        .eq('email', user.email)
-        .limit(1);
+      try {
+        const { data: gyms, error } = await supabase
+          .from('gyms')
+          .select('name')
+          .eq('email', user.email)
+          .limit(1);
+          
+        if (error) {
+          console.error('Error fetching gym:', error);
+          return;
+        }
         
-      if (error) {
-        console.error('Error fetching gym:', error);
-        return;
-      }
-      
-      if (gyms && gyms.length > 0) {
-        setGymName(gyms[0].name);
+        if (gyms && gyms.length > 0) {
+          setGymName(gyms[0].name);
+        }
+      } catch (error) {
+        console.error('Failed to fetch gym details:', error);
       }
     };
     
@@ -60,7 +64,7 @@ const Layout: React.FC = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // If user is not authenticated and not on login/signup page, redirect will be handled by ProtectedRoute
+  // If not authenticated, redirect will be handled by ProtectedRoute
   
   return (
     <div className="min-h-screen flex flex-col bg-zinc-50">
