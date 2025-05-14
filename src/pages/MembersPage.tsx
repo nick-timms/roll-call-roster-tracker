@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,17 @@ const MembersPage: React.FC = () => {
     membershipType: 'Standard',
     belt: ''
   });
+  
+  // Check if user is authenticated, if not redirect to login
+  useEffect(() => {
+    if (!user) {
+      console.log("No authenticated user found, redirecting to login");
+      navigate('/login');
+      return;
+    } else {
+      console.log("Authenticated user:", user);
+    }
+  }, [user, navigate]);
   
   // Fetch the gym data with better error handling
   const { data: gymData, isLoading: isLoadingGym } = useQuery({
@@ -77,7 +89,7 @@ const MembersPage: React.FC = () => {
         return { id: 'default', name: 'My Gym', email: user?.email || 'unknown' };
       }
     },
-    enabled: true, // Always try to fetch gym data
+    enabled: !!user, // Only run if user is authenticated
     retry: 1,
     staleTime: 60000,
   });
@@ -121,7 +133,7 @@ const MembersPage: React.FC = () => {
         return [];
       }
     },
-    enabled: !!gymData, // Only run if gymData is available
+    enabled: !!gymData && !!user, // Only run if gym data is available and user is authenticated
   });
   
   // Add member mutation with improved database writing
@@ -129,6 +141,12 @@ const MembersPage: React.FC = () => {
     mutationFn: async (member: Partial<Member>) => {
       try {
         if (!user?.email) {
+          toast({
+            title: "Authentication Required",
+            description: "You need to be logged in to add members",
+            variant: "destructive"
+          });
+          navigate('/login');
           throw new Error("User not logged in");
         }
 
@@ -236,6 +254,16 @@ const MembersPage: React.FC = () => {
       return;
     }
     
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "You need to be logged in to add members",
+        variant: "destructive"
+      });
+      navigate('/login');
+      return;
+    }
+    
     addMemberMutation.mutate(newMember);
   };
   
@@ -279,6 +307,23 @@ const MembersPage: React.FC = () => {
         </div>
         <div className="py-12 text-center bg-white rounded-xl border border-zinc-200 shadow-sm">
           <p className="text-zinc-500">Loading gym information...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show authentication required message
+  if (!user) {
+    return (
+      <div className="space-y-6 pb-16">
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+          <h1 className="text-2xl font-bold text-zinc-900">Members</h1>
+        </div>
+        <div className="py-12 text-center bg-white rounded-xl border border-zinc-200 shadow-sm">
+          <p className="text-zinc-500 mb-4">Authentication required to access members</p>
+          <Button onClick={() => navigate('/login')}>
+            Login to Continue
+          </Button>
         </div>
       </div>
     );
