@@ -14,6 +14,8 @@ export interface Member {
   email: string;
   phone?: string;
   membershipType?: string;
+  phoneNumber?: string; // Added this property
+  belt?: string; // Added this property
   qrCode: string;
   createdAt: string;
 }

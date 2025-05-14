@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -211,21 +210,27 @@ const DashboardPage: React.FC = () => {
                         <div>
                           <p className="font-medium">{`${member.firstName} ${member.lastName}`}</p>
                           <p className="text-xs text-muted-foreground">
-                            {member.phoneNumber || 'No phone'}
+                            {member.phoneNumber || member.phone || 'No phone'}
                           </p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                        member.belt === 'white' ? 'bg-zinc-100 text-zinc-800' :
-                        member.belt === 'blue' ? 'bg-blue-100 text-blue-800' :
-                        member.belt === 'purple' ? 'bg-purple-100 text-purple-800' :
-                        member.belt === 'brown' ? 'bg-amber-100 text-amber-800' :
-                        member.belt === 'black' ? 'bg-black text-white' : 'bg-zinc-100'
-                      }`}>
-                        {member.belt.charAt(0).toUpperCase() + member.belt.slice(1)}
-                      </span>
+                      {member.belt ? (
+                        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                          member.belt === 'white' ? 'bg-zinc-100 text-zinc-800' :
+                          member.belt === 'blue' ? 'bg-blue-100 text-blue-800' :
+                          member.belt === 'purple' ? 'bg-purple-100 text-purple-800' :
+                          member.belt === 'brown' ? 'bg-amber-100 text-amber-800' :
+                          member.belt === 'black' ? 'bg-black text-white' : 'bg-zinc-100'
+                        }`}>
+                          {member.belt.charAt(0).toUpperCase() + member.belt.slice(1)}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-zinc-100 text-zinc-800">
+                          None
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {member.email || 'No email'}
