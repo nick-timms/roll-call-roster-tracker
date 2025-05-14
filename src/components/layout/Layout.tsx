@@ -5,12 +5,12 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/integrations/supabase/client';
+import SettingsDropdown from './SettingsDropdown';
 import { 
   Calendar, 
   Users, 
   QrCode, 
   User,
-  LogOut,
   LayoutDashboard
 } from 'lucide-react';
 
@@ -18,7 +18,7 @@ const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const [gymName, setGymName] = useState('Your Gym');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -54,20 +54,6 @@ const Layout: React.FC = () => {
     }
   }, [user]);
 
-  const handleLogout = async () => {
-    if (confirm("Are you sure you want to log out?")) {
-      try {
-        await signOut();
-        toast({
-          title: "Logged out",
-          description: "You have been logged out of the system",
-        });
-      } catch (error) {
-        console.error('Error signing out:', error);
-      }
-    }
-  };
-
   const isActive = (path: string) => location.pathname === path;
 
   // If not authenticated, redirect will be handled by ProtectedRoute
@@ -86,18 +72,8 @@ const Layout: React.FC = () => {
                 <p className="text-xs text-zinc-500">{gymName}</p>
               </div>
             </div>
-            <div className="flex space-x-3">
-              {user && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={handleLogout}
-                  className="hidden md:flex"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Log Out
-                </Button>
-              )}
+            <div className="flex space-x-3 items-center">
+              <SettingsDropdown gymName={gymName} />
             </div>
           </div>
         </header>

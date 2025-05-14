@@ -1,0 +1,165 @@
+
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { LogOut, Settings, User } from 'lucide-react';
+
+interface SettingsDropdownProps {
+  gymName: string;
+}
+
+const SettingsDropdown = ({ gymName }: SettingsDropdownProps) => {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
+  const [newGymName, setNewGymName] = useState(gymName);
+
+  // Get initials for avatar
+  const getUserInitials = () => {
+    if (!user) return 'G';
+    return (user.email?.charAt(0) || 'U').toUpperCase();
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Logged out",
+        description: "You have been logged out of the system",
+      });
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  const handleLogin = () => {
+    navigate('/login');
+  };
+
+  const updateGymName = async () => {
+    if (!user?.email) return;
+
+    try {
+      const { data: gymData, error: fetchError } = await supabase
+        .from('gyms')
+        .select('id')
+        .eq('email', user.email)
+        .single();
+
+      if (fetchError || !gymData) {
+        toast({
+          title: "Error",
+          description: "Could not find gym information",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const { error: updateError } = await supabase
+        .from('gyms')
+        .update({ name: newGymName })
+        .eq('id', gymData.id);
+
+      if (updateError) {
+        toast({
+          title: "Error",
+          description: "Failed to update gym name",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      toast({
+        title: "Success",
+        description: "Gym name updated successfully",
+      });
+      setIsUpdatingName(false);
+    } catch (error) {
+      console.error('Error updating gym name:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update gym name",
+        variant: "destructive"
+      });
+    }
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="bg-primary text-primary-foreground">
+              {getUserInitials()}
+            </AvatarFallback>
+          </Avatar>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        {user ? (
+          <>
+            <div className="px-2 py-1.5 text-sm font-medium">
+              <p className="text-muted-foreground text-xs">Signed in as</p>
+              <p className="truncate">{user.email}</p>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Popover open={isUpdatingName} onOpenChange={setIsUpdatingName}>
+                <PopoverTrigger asChild>
+                  <button className="flex w-full cursor-default items-center px-2 py-1.5 text-sm">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Gym Settings</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                  <div className="space-y-4">
+                    <h4 className="font-medium leading-none">Gym Settings</h4>
+                    <div className="space-y-2">
+                      <Label htmlFor="gymName">Gym Name</Label>
+                      <Input 
+                        id="gymName" 
+                        value={newGymName} 
+                        onChange={(e) => setNewGymName(e.target.value)} 
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button onClick={updateGymName} className="bg-primary hover:bg-primary/90">
+                        Update
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout} className="text-red-500">
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Log Out</span>
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <DropdownMenuItem onClick={handleLogin}>
+            <User className="mr-2 h-4 w-4" />
+            <span>Log In</span>
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+export default SettingsDropdown;
