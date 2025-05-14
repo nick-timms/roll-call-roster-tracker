@@ -1,0 +1,211 @@
+
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { db } from '@/lib/db';
+import { decodeQRCode, formatDate, formatTime, generateId } from '@/lib/utils';
+import { QrCode, User, Check } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
+
+const ScanPage: React.FC = () => {
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [qrValue, setQrValue] = useState('');
+  const [scannedMemberId, setScannedMemberId] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  
+  const scannedMember = scannedMemberId ? db.getMemberById(scannedMemberId) : null;
+  
+  const handleScanQR = () => {
+    const memberId = decodeQRCode(qrValue);
+    
+    if (!memberId) {
+      toast({
+        title: "Invalid QR Code",
+        description: "The QR code is not recognized",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const member = db.getMemberById(memberId);
+    
+    if (!member) {
+      toast({
+        title: "Member Not Found",
+        description: "No member found with this QR code",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setScannedMemberId(memberId);
+    
+    // Check if already checked in today
+    const today = formatDate(new Date());
+    const existingAttendance = db.getAttendanceRecords().find(
+      record => record.memberId === memberId && record.date === today
+    );
+    
+    if (existingAttendance) {
+      toast({
+        title: "Already Checked In",
+        description: `${member.firstName} ${member.lastName} already checked in today at ${existingAttendance.timeIn}`,
+      });
+    }
+  };
+  
+  const handleCheckIn = () => {
+    if (!scannedMemberId || !scannedMember) {
+      toast({
+        title: "No Member Selected",
+        description: "Please scan a valid QR code first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const now = new Date();
+    
+    const attendanceRecord = {
+      id: generateId(),
+      memberId: scannedMemberId,
+      date: formatDate(now),
+      timeIn: formatTime(now),
+      notes: notes || undefined
+    };
+    
+    try {
+      db.checkInMember(attendanceRecord);
+      toast({
+        title: "Check-in Successful",
+        description: `${scannedMember.firstName} ${scannedMember.lastName} has been checked in`,
+      });
+      
+      // Reset the form
+      setQrValue('');
+      setScannedMemberId(null);
+      setNotes('');
+    } catch (error) {
+      console.error('Error checking in member:', error);
+      toast({
+        title: "Error",
+        description: "There was a problem checking in the member",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  return (
+    <div className="space-y-6 pb-16">
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+        <h1 className="text-2xl font-bold">Scan QR Code</h1>
+      </div>
+      
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Scan Member QR Code</CardTitle>
+            <CardDescription>
+              Scan a member's QR code to check them in
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500">
+                In a real application, this would use the device camera to scan a QR code.
+                For this demo, paste the QR code value below:
+              </p>
+              
+              <div className="space-y-2">
+                <Input
+                  placeholder="Paste QR code here..."
+                  value={qrValue}
+                  onChange={(e) => setQrValue(e.target.value)}
+                />
+              </div>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={handleScanQR} disabled={!qrValue}>
+              <QrCode className="mr-2 h-4 w-4" />
+              Process QR Code
+            </Button>
+          </CardFooter>
+        </Card>
+        
+        <Card className={scannedMemberId ? "border-green-200" : ""}>
+          <CardHeader>
+            <CardTitle>Check-in Details</CardTitle>
+            <CardDescription>
+              {scannedMember 
+                ? `Check in ${scannedMember.firstName} ${scannedMember.lastName}`
+                : "Scan a QR code to check in a member"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {scannedMember ? (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    <User className="h-6 w-6 text-green-700" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-lg">
+                      {scannedMember.firstName} {scannedMember.lastName}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {scannedMember.membershipType}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="pt-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Notes (Optional)
+                  </label>
+                  <Input
+                    placeholder="Add any notes about this check-in..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                
+                <div className="flex space-x-3">
+                  <Button 
+                    className="flex-1" 
+                    onClick={handleCheckIn}
+                  >
+                    <Check className="mr-2 h-4 w-4" />
+                    Check In
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate(`/members/${scannedMember.id}`)}
+                  >
+                    View Profile
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="py-8 text-center">
+                <QrCode className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-1">
+                  No Member Scanned
+                </h3>
+                <p className="text-gray-500 mb-4">
+                  Scan a member's QR code to check them in
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default ScanPage;
