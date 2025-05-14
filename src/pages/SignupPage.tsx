@@ -17,6 +17,7 @@ const signupSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string().min(6, 'Password must be at least 6 characters'),
+  gymName: z.string().min(2, 'Gym name must be at least 2 characters'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -36,6 +37,7 @@ const SignupPage = () => {
       email: '',
       password: '',
       confirmPassword: '',
+      gymName: '',
     },
   });
 
@@ -44,7 +46,7 @@ const SignupPage = () => {
     setError(null);
     
     try {
-      await signUp(data.email, data.password);
+      await signUp(data.email, data.password, data.gymName);
       
       // The signup and login is handled in auth context
       // A default gym will be created after first login
@@ -85,6 +87,24 @@ const SignupPage = () => {
                     <Input 
                       type="email" 
                       autoComplete="email" 
+                      disabled={isLoading}
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="gymName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Gym Name</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="Enter your gym name" 
                       disabled={isLoading}
                       {...field} 
                     />

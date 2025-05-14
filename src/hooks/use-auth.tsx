@@ -9,7 +9,7 @@ type AuthContextType = {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, gymName?: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -58,7 +58,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, gymName: string = 'My Gym') => {
     try {
       setIsLoading(true);
       const { error } = await supabase.auth.signUp({
@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       // Auto sign in for better user experience
-      await signIn(email, password);
+      await signIn(email, password, gymName);
     } catch (error: any) {
       toast({
         title: "Error creating account",
@@ -87,12 +87,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const createDefaultGym = async (email: string) => {
+  const createDefaultGym = async (email: string, gymName: string) => {
     try {
       const { error: gymError } = await supabase
         .from('gyms')
         .insert({
-          name: 'My Gym',
+          name: gymName,
           email: email,
         });
         
@@ -102,8 +102,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       
       toast({
-        title: 'Default gym created',
-        description: 'You can change the name in Account settings.'
+        title: 'Gym created',
+        description: 'Your gym has been set up successfully.'
       });
       
       return true;
@@ -113,7 +113,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, gymNameParam?: string) => {
     try {
       setIsLoading(true);
       const { error } = await supabase.auth.signInWithPassword({
@@ -136,7 +136,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
 
         if (!gyms || gyms.length === 0) {
-          await createDefaultGym(email);
+          const gymName = gymNameParam || 'My Gym'; // Use provided name or default
+          await createDefaultGym(email, gymName);
         }
       } catch (error) {
         console.error('Failed during gym check/creation:', error);

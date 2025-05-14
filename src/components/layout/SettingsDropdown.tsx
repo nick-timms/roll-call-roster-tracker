@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
@@ -22,12 +22,46 @@ interface SettingsDropdownProps {
   gymName: string;
 }
 
-const SettingsDropdown = ({ gymName }: SettingsDropdownProps) => {
+const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isUpdatingName, setIsUpdatingName] = useState(false);
-  const [newGymName, setNewGymName] = useState(gymName);
+  const [newGymName, setNewGymName] = useState(initialGymName);
+  const [isLoading, setIsLoading] = useState(false);
+  const [gymId, setGymId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNewGymName(initialGymName);
+  }, [initialGymName]);
+
+  // Get gym ID when component mounts
+  useEffect(() => {
+    const fetchGymId = async () => {
+      if (!user?.email) return;
+      
+      try {
+        const { data: gyms, error } = await supabase
+          .from('gyms')
+          .select('id')
+          .eq('email', user.email)
+          .single();
+          
+        if (error) {
+          console.error('Error fetching gym ID:', error);
+          return;
+        }
+        
+        if (gyms) {
+          setGymId(gyms.id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch gym ID:', error);
+      }
+    };
+    
+    fetchGymId();
+  }, [user]);
 
   // Get initials for avatar
   const getUserInitials = () => {
@@ -52,28 +86,22 @@ const SettingsDropdown = ({ gymName }: SettingsDropdownProps) => {
   };
 
   const updateGymName = async () => {
-    if (!user?.email) return;
+    if (!user?.email || !gymId) {
+      toast({
+        title: "Error",
+        description: "Could not find gym information",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
-      const { data: gymData, error: fetchError } = await supabase
-        .from('gyms')
-        .select('id')
-        .eq('email', user.email)
-        .single();
-
-      if (fetchError || !gymData) {
-        toast({
-          title: "Error",
-          description: "Could not find gym information",
-          variant: "destructive"
-        });
-        return;
-      }
-
       const { error: updateError } = await supabase
         .from('gyms')
         .update({ name: newGymName })
-        .eq('id', gymData.id);
+        .eq('id', gymId);
 
       if (updateError) {
         toast({
@@ -89,6 +117,9 @@ const SettingsDropdown = ({ gymName }: SettingsDropdownProps) => {
         description: "Gym name updated successfully",
       });
       setIsUpdatingName(false);
+      
+      // Force refresh the page to update the gym name in the header
+      window.location.reload();
     } catch (error) {
       console.error('Error updating gym name:', error);
       toast({
@@ -96,6 +127,8 @@ const SettingsDropdown = ({ gymName }: SettingsDropdownProps) => {
         description: "Failed to update gym name",
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -135,11 +168,17 @@ const SettingsDropdown = ({ gymName }: SettingsDropdownProps) => {
                         id="gymName" 
                         value={newGymName} 
                         onChange={(e) => setNewGymName(e.target.value)} 
+                        placeholder="Enter gym name"
+                        disabled={isLoading}
                       />
                     </div>
                     <div className="flex justify-end">
-                      <Button onClick={updateGymName} className="bg-primary hover:bg-primary/90">
-                        Update
+                      <Button 
+                        onClick={updateGymName} 
+                        className="bg-primary hover:bg-primary/90"
+                        disabled={isLoading || !newGymName.trim()}
+                      >
+                        {isLoading ? "Updating..." : "Update"}
                       </Button>
                     </div>
                   </div>
