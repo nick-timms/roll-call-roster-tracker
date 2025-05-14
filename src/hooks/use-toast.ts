@@ -1,5 +1,14 @@
 
-import { useToast as useToastHook, toast as toastFunction } from "@/components/ui/toaster";
+// Re-export from the toaster component
+import { useToast as useToastHook, type ToasterToast } from "@/components/ui/toaster";
 
 export const useToast = useToastHook;
-export const toast = toastFunction;
+
+// Define a toast function for compatibility
+export const toast = (props: Omit<ToasterToast, "id">) => {
+  const { toast } = useToastHook();
+  return toast(props);
+};
+
+// Re-export types
+export type { ToasterToast };

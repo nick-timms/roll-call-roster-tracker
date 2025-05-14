@@ -70,6 +70,24 @@ class Database {
     return records.filter(record => record.date === date);
   }
 
+  // Add this method for check-ins
+  addAttendanceRecord(record: AttendanceRecord): void {
+    const records = this.getAttendanceRecords();
+    records.push(record);
+    this.setItem("attendanceRecords", records);
+  }
+
+  // Add this method for updating attendance records
+  updateAttendanceRecord(id: string, updates: Partial<AttendanceRecord>): void {
+    const records = this.getAttendanceRecords();
+    const index = records.findIndex(r => r.id === id);
+    
+    if (index >= 0) {
+      records[index] = { ...records[index], ...updates };
+      this.setItem("attendanceRecords", records);
+    }
+  }
+
   checkInMember(record: AttendanceRecord): void {
     const records = this.getAttendanceRecords();
     

@@ -13,9 +13,11 @@ export interface Member {
   lastName: string;
   email: string;
   phone?: string;
+  phoneNumber?: string;
+  belt?: string;
   membershipType?: string;
-  phoneNumber?: string; // Added this property
-  belt?: string; // Added this property
+  membership_status?: string; // Add this property
+  notes?: string; // Add this property
   qrCode: string;
   createdAt: string;
 }
@@ -25,5 +27,6 @@ export interface AttendanceRecord {
   memberId: string;
   date: string; // format: YYYY-MM-DD
   timeIn: string;
+  timeOut?: string; // Add this property
   notes?: string;
 }
