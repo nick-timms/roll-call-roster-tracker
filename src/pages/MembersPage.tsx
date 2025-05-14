@@ -110,7 +110,6 @@ const MembersPage: React.FC = () => {
         };
         
         console.log("Submitting new member to Supabase:", newMember);
-        console.log("Supabase URL:", SUPABASE_URL);
         console.log("Auth state:", { 
           session: session ? "Present" : "Missing",
           accessToken: session?.access_token ? "Present" : "Missing"
@@ -354,12 +353,12 @@ const MembersPage: React.FC = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="secondary" onClick={handleCloseDialog}>
+            <Button type="button" variant="secondary" onClick={() => setIsDialogOpen(false)}>
               Cancel
             </Button>
             <Button 
               type="submit" 
-              onClick={handleAddMember} 
+              onClick={() => handleAddMember()} 
               disabled={addMemberMutation.isPending || newMemberName.trim() === ''}
             >
               {addMemberMutation.isPending ? "Adding..." : "Add Member"}

@@ -27,7 +27,7 @@ export const supabase = createClient<Database>(
         const fetchOptions = {
           ...options,
           headers: {
-            ...(options?.headers || {}),
+            ...((options as any)?.headers || {}),
             'apikey': SUPABASE_PUBLISHABLE_KEY,
             'Content-Type': 'application/json'
           }
