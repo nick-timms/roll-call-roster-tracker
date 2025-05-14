@@ -19,12 +19,16 @@ export const supabase = createClient<Database>(
       storage: localStorage
     },
     global: {
+      headers: {
+        'apikey': SUPABASE_PUBLISHABLE_KEY
+      },
       fetch: (...args) => {
         const [url, options] = args;
         const fetchOptions = {
           ...options,
           headers: {
             ...(options?.headers || {}),
+            'apikey': SUPABASE_PUBLISHABLE_KEY,
           }
         };
         return fetch(url, fetchOptions);
