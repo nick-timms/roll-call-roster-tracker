@@ -4,6 +4,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 import { 
   Calendar, 
   Users, 
@@ -18,24 +19,25 @@ const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { user, signOut } = useAuth();
   const gym = db.getGym();
 
   const handleLogout = () => {
     if (confirm("Are you sure you want to log out? This is a demo app, so all data will be lost.")) {
       db.clearAll();
+      signOut();
       toast({
         title: "Logged out",
         description: "You have been logged out of the system",
       });
-      navigate('/');
     }
   };
 
   const isActive = (path: string) => location.pathname === path;
 
-  if (!gym && location.pathname !== '/') {
+  if (!gym && location.pathname !== '/' && !location.pathname.includes('/setup')) {
     // Redirect to setup if no gym is set up
-    navigate('/');
+    navigate('/setup');
     return null;
   }
 
@@ -54,15 +56,17 @@ const Layout: React.FC = () => {
               </div>
             </div>
             <div className="flex space-x-3">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleLogout}
-                className="hidden md:flex"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Log Out
-              </Button>
+              {user && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleLogout}
+                  className="hidden md:flex"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Log Out
+                </Button>
+              )}
             </div>
           </div>
         </header>
@@ -122,7 +126,7 @@ const Layout: React.FC = () => {
       </div>
       
       {/* Mobile Navigation */}
-      {gym && (
+      {gym && user && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 p-1 shadow-md z-10">
           <div className="flex justify-around">
             <Link to="/dashboard" className="flex flex-col items-center p-2">
