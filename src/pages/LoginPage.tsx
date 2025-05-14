@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -24,12 +24,13 @@ const LoginPage = () => {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-
-  // If user is already logged in, redirect to dashboard
-  if (user) {
-    navigate('/dashboard', { replace: true });
-    return null; // Prevent rendering the login form
-  }
+  
+  // Effect to check if user is already logged in and redirect
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -45,13 +46,23 @@ const LoginPage = () => {
     
     try {
       await signIn(data.email, data.password);
-      // Redirect is handled in signIn function
+      // The redirect is now handled in the useEffect above
     } catch (error: any) {
       setError(error.message || 'Failed to sign in');
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Don't render the form if user is already logged in
+  if (user) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <span className="ml-3 text-gray-600">Redirecting to dashboard...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12">
