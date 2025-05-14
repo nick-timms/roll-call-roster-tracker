@@ -4,6 +4,9 @@ export interface Gym {
   name: string;
   email: string;
   createdAt: string;
+  phone?: string;
+  company_name?: string;
+  address?: string;
 }
 
 export interface Member {

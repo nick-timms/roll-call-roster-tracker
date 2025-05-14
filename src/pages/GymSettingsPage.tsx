@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,15 +8,7 @@ import { Settings } from 'lucide-react';
 import { useAuth } from '@/hooks/auth/use-auth';
 import { supabase } from '@/integrations/supabase/client';
 import { ensureGymExists } from '@/hooks/auth/gym-service';
-
-interface GymDetails {
-  id: string;
-  name: string;
-  phone?: string;
-  company_name?: string;
-  address?: string;
-  email: string;
-}
+import { GymDetails } from '@/hooks/auth/types';
 
 const GymSettingsPage: React.FC = () => {
   const { toast } = useToast();

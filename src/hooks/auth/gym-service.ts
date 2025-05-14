@@ -1,5 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { GymDetails } from "./types";
 
 export const createDefaultGym = async (email: string, gymName: string = 'My Gym') => {
   try {
@@ -21,7 +22,7 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
     try {
       const { data: existingGyms, error: checkError } = await supabase
         .from('gyms')
-        .select('id, name')
+        .select('id, name, phone, company_name, address, email')
         .eq('email', email)
         .maybeSingle();
       
@@ -53,7 +54,7 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
             email: email,
             name: gymName
           })
-          .select()
+          .select('id, name, phone, company_name, address, email')
           .single();
         
         if (insertError) {
@@ -113,7 +114,7 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
       try {
         const { data: existingGyms, error: checkError } = await supabase
           .from('gyms')
-          .select('id, name, phone, company_name, address')
+          .select('id, name, phone, company_name, address, email')
           .eq('email', email)
           .maybeSingle();
         
@@ -132,11 +133,11 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
         // If gym already exists, return it
         if (existingGyms) {
           console.log("Gym already exists:", existingGyms);
-          return existingGyms;
+          return existingGyms as GymDetails;
         }
         
         // If no gym exists, create one
-        return await createDefaultGym(email, gymName);
+        return await createDefaultGym(email, gymName) as GymDetails | null;
       } catch (error) {
         console.error(`Attempt ${retryCount + 1}: Network error checking for existing gym:`, error);
         retryCount++;

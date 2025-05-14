@@ -13,4 +13,8 @@ export type AuthContextType = {
 export type GymDetails = {
   id: string;
   name: string;
+  phone?: string;
+  company_name?: string;
+  address?: string;
+  email?: string;
 };
