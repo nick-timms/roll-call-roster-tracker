@@ -1,120 +1,77 @@
 
-import { supabase } from '@/integrations/supabase/client';
-import { Session } from '@supabase/supabase-js';
-import { v4 as uuidv4 } from 'uuid';
+import { supabase } from "@/integrations/supabase/client";
 
-export async function ensureGymExists(email: string, gymName: string = 'My Gym') {
+export const createDefaultGym = async (email: string, gymName: string = 'My Gym') => {
   try {
-    console.log("Ensuring gym exists for:", email);
+    console.log("Creating default gym for:", email);
     
-    // Check if gym already exists for this user
-    const { data: existingGym, error: queryError } = await supabase
+    // Check if a gym already exists for this email
+    const { data: existingGyms, error: checkError } = await supabase
       .from('gyms')
-      .select('*')
+      .select('id, name')
       .eq('email', email)
-      .limit(1);
-      
-    if (queryError) {
-      console.error("Error checking for existing gym:", queryError);
-      throw queryError;
+      .maybeSingle();
+    
+    if (checkError) {
+      console.error("Error checking for existing gym:", checkError);
+      throw checkError;
     }
     
-    if (existingGym && existingGym.length > 0) {
-      console.log("Gym already exists for user:", existingGym[0]);
-      return existingGym[0];
+    // If gym already exists, return it
+    if (existingGyms) {
+      console.log("Gym already exists:", existingGyms);
+      return existingGyms;
     }
     
-    // Create new gym
-    const newGym = {
-      name: gymName,
-      email: email,
-    };
-    
-    console.log("Inserting new gym:", newGym);
-    
-    const { data: createdGym, error: insertError } = await supabase
+    // Create a new gym
+    const { data: newGym, error: insertError } = await supabase
       .from('gyms')
-      .insert([newGym])
-      .select();
-      
+      .insert({
+        email: email,
+        name: gymName
+      })
+      .select()
+      .single();
+    
     if (insertError) {
       console.error("Error creating gym:", insertError);
       throw insertError;
     }
     
-    console.log("Successfully created gym:", createdGym);
-    return createdGym[0];
-  } catch (error) {
-    console.error("Error in ensureGymExists:", error);
-    throw error;
-  }
-}
-
-export async function createDefaultGym() {
-  try {
-    // Check for an existing session
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session || !session.user) {
-      console.log("No authenticated user found");
-      return null;
-    }
-    
-    console.log("Creating default gym for user:", session.user.email);
-    
-    return ensureGymExists(session.user.email);
+    console.log("Created new gym:", newGym);
+    return newGym;
   } catch (error) {
     console.error("Error in createDefaultGym:", error);
     throw error;
   }
-}
+};
 
-export async function getGymId(session: Session | null) {
-  if (!session || !session.user || !session.user.email) {
-    console.error("Error fetching gym ID: No valid session or user email");
-    return null;
-  }
-  
+export const ensureGymExists = async (email: string, gymName: string = 'My Gym') => {
   try {
-    const { data: gym, error } = await supabase
+    console.log("Ensuring gym exists for:", email);
+    
+    // Check if a gym already exists for this email
+    const { data: existingGyms, error: checkError } = await supabase
       .from('gyms')
-      .select('id')
-      .eq('email', session.user.email)
-      .single();
-      
-    if (error) {
-      console.error("Error fetching gym ID:", error);
-      return null;
+      .select('id, name')
+      .eq('email', email)
+      .maybeSingle();
+    
+    if (checkError) {
+      console.error("Error checking for existing gym:", checkError);
+      throw checkError;
     }
     
-    return gym?.id || null;
-  } catch (error) {
-    console.error("Error fetching gym ID:", error);
-    return null;
-  }
-}
-
-export async function getGymDetails(session: Session | null) {
-  if (!session || !session.user || !session.user.email) {
-    console.error("Error fetching gym details: No valid session or user email");
-    return null;
-  }
-  
-  try {
-    const { data: gym, error } = await supabase
-      .from('gyms')
-      .select('*')
-      .eq('email', session.user.email)
-      .single();
-      
-    if (error) {
-      console.error("Error fetching gym details:", error);
-      return null;
+    // If gym already exists, return it
+    if (existingGyms) {
+      console.log("Gym already exists:", existingGyms);
+      return existingGyms;
     }
     
-    return gym;
+    // If no gym exists, create one
+    return await createDefaultGym(email, gymName);
   } catch (error) {
-    console.error("Error fetching gym details:", error);
-    return null;
+    console.error("Error in ensureGymExists:", error);
+    throw error;
   }
-}
+};

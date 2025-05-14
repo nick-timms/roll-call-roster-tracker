@@ -1,6 +1,4 @@
-
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/auth/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,7 +22,6 @@ interface SettingsDropdownProps {
 
 const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) => {
   const { user, signOut } = useAuth();
-  const navigate = useNavigate();
   const { toast } = useToast();
   const [isUpdatingName, setIsUpdatingName] = useState(false);
   const [newGymName, setNewGymName] = useState(initialGymName || 'My Gym');
@@ -73,13 +70,16 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
 
   const handleLogout = async () => {
     try {
+      console.log("Logout button clicked");
       await signOut();
-      toast({
-        title: "Logged out",
-        description: "You have been logged out of the system",
-      });
+      // No need for manual toast or navigation here since they're handled in signOut
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('Error during logout:', error);
+      toast({
+        title: "Logout failed",
+        description: "There was a problem logging you out. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
