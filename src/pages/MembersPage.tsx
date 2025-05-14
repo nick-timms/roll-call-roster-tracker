@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -34,7 +33,8 @@ const MembersPage: React.FC = () => {
     lastName: '',
     email: '',
     phone: '',
-    membershipType: 'Standard'
+    membershipType: 'Standard',
+    belt: ''
   });
   
   // Fetch the gym data with better error handling
@@ -59,8 +59,15 @@ const MembersPage: React.FC = () => {
         }
         
         if (!data) {
-          console.log('No gym found for user, using default');
-          return { id: 'default', name: 'My Gym', email: user.email };
+          console.log('No gym found for user, creating a default gym');
+          try {
+            const newGym = await createDefaultGym(user.email);
+            console.log('Created default gym:', newGym);
+            return newGym;
+          } catch (e) {
+            console.error('Failed to create default gym:', e);
+            return { id: 'default', name: 'My Gym', email: user.email };
+          }
         }
         
         console.log("Found gym data:", data);
@@ -117,7 +124,7 @@ const MembersPage: React.FC = () => {
     enabled: !!gymData, // Only run if gymData is available
   });
   
-  // Add member mutation with robust error handling
+  // Add member mutation with improved database writing
   const addMemberMutation = useMutation({
     mutationFn: async (member: Partial<Member>) => {
       try {
@@ -128,77 +135,59 @@ const MembersPage: React.FC = () => {
         console.log("Starting member addition process");
         
         // First ensure we have a gym - try to use existing gym or create a default one
-        let gymId = gymData?.id || 'default';
-        let actualGymId = gymId;
+        let gymId = gymData?.id;
         
-        if (gymId === 'default') {
-          console.log("Using default gym, attempting to create a real one");
-          try {
-            // Try to create a real gym
-            const newGym = await createDefaultGym(user.email);
-            if (newGym && newGym.id !== 'default') {
-              actualGymId = newGym.id;
-              console.log("Created new gym with ID:", actualGymId);
-              // Refresh gym data
-              queryClient.invalidateQueries({ queryKey: ['gym'] });
-            } else {
-              console.log("Using fallback temporary gym ID");
-              // Generate a temporary ID for the fallback case
-              actualGymId = crypto.randomUUID();
-            }
-          } catch (gymError) {
-            console.error("Failed to create gym:", gymError);
-            // Generate a temporary ID for the fallback case
-            actualGymId = crypto.randomUUID();
-          }
+        if (!gymId || gymId === 'default') {
+          console.log("No gym ID found, creating a default gym");
+          const newGym = await createDefaultGym(user.email);
+          gymId = newGym.id;
+          console.log("Created new gym with ID:", gymId);
+          
+          // Refresh gym data
+          queryClient.invalidateQueries({ queryKey: ['gym'] });
         }
         
         // Generate QR code for the member
         const qrCode = generateQRCode(crypto.randomUUID());
         
-        console.log(`Adding member to gym: ${actualGymId}`);
+        console.log(`Adding member to gym: ${gymId}`);
         
-        // Try to insert the member into the database
-        try {
-          const { data, error } = await supabase
-            .from('members')
-            .insert({
-              gym_id: actualGymId,
-              first_name: member.firstName,
-              last_name: member.lastName,
-              email: member.email,
-              phone: member.phone,
-              membership_type: member.membershipType,
-              belt: member.belt,
-              qr_code: qrCode,
-            })
-            .select()
-            .single();
-          
-          if (error) {
-            console.error("Database error inserting member:", error);
-            throw error;
-          }
-          
-          return data;
-        } catch (insertError) {
-          console.error("Error during member insertion:", insertError);
-          
-          // If database insertion fails, return a simulated member object for the UI
-          // This allows the UI to work even if the database operations fail
-          return {
-            id: crypto.randomUUID(),
-            gymId: actualGymId,
-            firstName: member.firstName || '',
-            lastName: member.lastName || '',
-            email: member.email || '',
-            phone: member.phone || '',
-            membershipType: member.membershipType || 'Standard',
-            belt: member.belt || '',
-            qrCode,
-            createdAt: new Date().toISOString()
-          };
+        // Insert the member into the database
+        const { data, error } = await supabase
+          .from('members')
+          .insert({
+            gym_id: gymId,
+            first_name: member.firstName,
+            last_name: member.lastName,
+            email: member.email,
+            phone: member.phone,
+            membership_type: member.membershipType,
+            belt: member.belt,
+            qr_code: qrCode,
+          })
+          .select()
+          .single();
+        
+        if (error) {
+          console.error("Database error inserting member:", error);
+          throw error;
         }
+        
+        console.log("Member inserted successfully:", data);
+        
+        // Return the member with our application's data model format
+        return {
+          id: data.id,
+          gymId: data.gym_id,
+          firstName: data.first_name,
+          lastName: data.last_name,
+          email: data.email,
+          phone: data.phone || '',
+          membershipType: data.membership_type || 'Standard',
+          belt: data.belt || '',
+          qrCode: data.qr_code,
+          createdAt: data.created_at
+        };
       } catch (e) {
         console.error("Exception adding member:", e);
         throw e;
@@ -208,10 +197,7 @@ const MembersPage: React.FC = () => {
       console.log("Member added successfully:", data);
       
       // Update the members list
-      queryClient.setQueryData(['members', gymData?.id], (oldData: any) => {
-        const currentMembers = oldData || [];
-        return [...currentMembers, data];
-      });
+      queryClient.invalidateQueries({ queryKey: ['members', gymData?.id] });
       
       // Show success message
       toast({
@@ -225,7 +211,8 @@ const MembersPage: React.FC = () => {
         lastName: '',
         email: '',
         phone: '',
-        membershipType: 'Standard'
+        membershipType: 'Standard',
+        belt: ''
       });
       setShowAddDialog(false);
     },
@@ -252,12 +239,6 @@ const MembersPage: React.FC = () => {
     addMemberMutation.mutate(newMember);
   };
   
-  const filteredMembers = members.filter((member) => {
-    const fullName = `${member.firstName} ${member.lastName}`.toLowerCase();
-    return fullName.includes(searchQuery.toLowerCase()) || 
-           member.email.toLowerCase().includes(searchQuery.toLowerCase());
-  });
-
   // This function will always succeed (it returns a Promise that resolves)
   const handleCreateGym = async () => {
     if (!user?.email) {
@@ -332,8 +313,12 @@ const MembersPage: React.FC = () => {
           <div className="py-12 text-center bg-white rounded-xl border border-zinc-200 shadow-sm">
             <p className="text-zinc-500">Loading members...</p>
           </div>
-        ) : filteredMembers.length > 0 ? (
-          filteredMembers.map((member) => (
+        ) : members.length > 0 ? (
+          members.filter((member) => {
+            const fullName = `${member.firstName} ${member.lastName}`.toLowerCase();
+            return fullName.includes(searchQuery.toLowerCase()) || 
+                  member.email.toLowerCase().includes(searchQuery.toLowerCase());
+          }).map((member) => (
             <Link to={`/members/${member.id}`} key={member.id}>
               <Card className="hover:bg-zinc-50 transition-colors border-zinc-200 shadow-sm">
                 <CardContent className="p-4 flex justify-between items-center">
@@ -436,6 +421,17 @@ const MembersPage: React.FC = () => {
                 value={newMember.membershipType}
                 onChange={(e) => setNewMember({...newMember, membershipType: e.target.value})}
                 placeholder="Standard"
+                className="border-zinc-200"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="belt">Belt</Label>
+              <Input
+                id="belt"
+                value={newMember.belt}
+                onChange={(e) => setNewMember({...newMember, belt: e.target.value})}
+                placeholder="White"
                 className="border-zinc-200"
               />
             </div>

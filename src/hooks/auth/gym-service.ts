@@ -71,7 +71,7 @@ export const ensureGymExists = async (email: string, preferredGymName: string = 
 };
 
 /**
- * Creates a default gym for a user that will work even if database operations fail
+ * Creates a default gym for a user with robust error handling
  */
 export const createDefaultGym = async (email: string): Promise<GymDetails> => {
   try {
@@ -81,6 +81,23 @@ export const createDefaultGym = async (email: string): Promise<GymDetails> => {
     
     console.log(`Creating default gym for ${email}`);
     
+    // First check if a gym already exists for this email
+    try {
+      const { data: existingGyms, error: checkError } = await supabase
+        .from('gyms')
+        .select('id, name')
+        .eq('email', email)
+        .maybeSingle();
+      
+      if (!checkError && existingGyms) {
+        console.log('Found existing gym:', existingGyms.id);
+        return existingGyms;
+      }
+    } catch (e) {
+      console.error("Error checking for existing gym:", e);
+    }
+    
+    // If no gym exists or there was an error checking, try to create one
     try {
       const { data, error } = await supabase
         .from('gyms')
@@ -96,6 +113,7 @@ export const createDefaultGym = async (email: string): Promise<GymDetails> => {
         return { id: 'default', name: 'My Gym' };
       }
       
+      console.log('Created new gym:', data.id);
       return data;
     } catch (e) {
       console.error("Exception creating default gym:", e);
