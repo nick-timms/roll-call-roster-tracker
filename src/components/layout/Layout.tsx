@@ -2,14 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/auth/use-auth';
 import { supabase } from '@/integrations/supabase/client';
 import SettingsDropdown from './SettingsDropdown';
 import { 
   Users, 
   QrCode, 
   User,
-  LayoutDashboard
+  LayoutDashboard,
+  Settings
 } from 'lucide-react';
 
 const Layout: React.FC = () => {
@@ -57,8 +58,6 @@ const Layout: React.FC = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // If not authenticated, redirect will be handled by ProtectedRoute
-  
   return (
     <div className="min-h-screen flex flex-col bg-zinc-50">
       {user && (
@@ -123,6 +122,16 @@ const Layout: React.FC = () => {
                   Gym Account
                 </Button>
               </Link>
+              <Link to="/settings">
+                <Button 
+                  variant={isActive('/settings') ? "default" : "ghost"} 
+                  className="w-full justify-start text-sm font-medium"
+                  size="sm"
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  Gym Settings
+                </Button>
+              </Link>
             </nav>
           </aside>
         )}
@@ -148,9 +157,9 @@ const Layout: React.FC = () => {
               <QrCode className={`h-5 w-5 ${isActive('/scan') ? 'text-primary' : 'text-zinc-500'}`} />
               <span className={`text-xs mt-1 ${isActive('/scan') ? 'text-primary font-medium' : 'text-zinc-500'}`}>Scan</span>
             </Link>
-            <Link to="/account" className="flex flex-col items-center p-2">
-              <User className={`h-5 w-5 ${isActive('/account') ? 'text-primary' : 'text-zinc-500'}`} />
-              <span className={`text-xs mt-1 ${isActive('/account') ? 'text-primary font-medium' : 'text-zinc-500'}`}>Account</span>
+            <Link to="/settings" className="flex flex-col items-center p-2">
+              <Settings className={`h-5 w-5 ${isActive('/settings') ? 'text-primary' : 'text-zinc-500'}`} />
+              <span className={`text-xs mt-1 ${isActive('/settings') ? 'text-primary font-medium' : 'text-zinc-500'}`}>Settings</span>
             </Link>
           </div>
         </nav>

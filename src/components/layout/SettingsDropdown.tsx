@@ -1,15 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useAuth } from '@/hooks/auth/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { getGymIdByEmail } from '@/hooks/auth/gym-service';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,42 +12,16 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { LogOut, Settings, User } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface SettingsDropdownProps {
   gymName: string;
 }
 
-const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) => {
-  const { user, signOut, session } = useAuth();
+const SettingsDropdown = ({ gymName }: SettingsDropdownProps) => {
+  const { user, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [isUpdatingName, setIsUpdatingName] = useState(false);
-  const [newGymName, setNewGymName] = useState(initialGymName || 'My Gym');
-  const [isLoading, setIsLoading] = useState(false);
-  const [gymId, setGymId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (initialGymName) {
-      setNewGymName(initialGymName);
-    }
-  }, [initialGymName]);
-
-  // Get gym ID when component mounts
-  useEffect(() => {
-    const fetchGymId = async () => {
-      if (!user?.email) return;
-      
-      try {
-        const id = await getGymIdByEmail(user.email);
-        console.log("Fetched gym ID in settings:", id);
-        setGymId(id);
-      } catch (error) {
-        console.error("Error fetching gym ID:", error);
-      }
-    };
-    
-    fetchGymId();
-  }, [user]);
 
   // Get initials for avatar
   const getUserInitials = () => {
@@ -69,7 +37,6 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
       await signOut();
       
       // Note: Navigation and toast are handled in the signOut function
-      // So we don't need to do anything else here
     } catch (error) {
       console.error('Error during logout:', error);
       // Toast is already handled in the signOut function
@@ -80,111 +47,8 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
     navigate('/login');
   };
 
-  const updateGymName = async () => {
-    if (!user?.email) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to update gym settings",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!session) {
-      toast({
-        title: "Error",
-        description: "No active session found. Please try logging in again",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      // If we have a gym ID, update it; otherwise try to create a new gym
-      if (gymId) {
-        try {
-          console.log("Updating gym name for gym ID:", gymId);
-          console.log("Auth state:", { 
-            session: session ? "Present" : "Missing",
-            accessToken: session.access_token ? "Present" : "Missing"
-          });
-          
-          const { error: updateError } = await supabase
-            .from('gyms')
-            .update({ name: newGymName })
-            .eq('id', gymId);
-
-          if (updateError) {
-            console.error("Error updating gym name:", updateError);
-            throw updateError;
-          }
-          
-          toast({
-            title: "Success",
-            description: "Gym name updated successfully",
-          });
-          setIsUpdatingName(false);
-          
-          // Force refresh the page to update the gym name in the header
-          window.location.reload();
-        } catch (error: any) {
-          console.error('Network error updating gym name:', error);
-          toast({
-            title: "Connection Error",
-            description: `Failed to update gym name: ${error.message || "Network issue"}`,
-            variant: "destructive"
-          });
-        }
-      } else {
-        // Try to create a new gym if none exists
-        try {
-          console.log("Creating new gym for email:", user.email);
-          console.log("Auth state:", { 
-            session: session ? "Present" : "Missing",
-            accessToken: session.access_token ? "Present" : "Missing"
-          });
-          
-          const { error: insertError } = await supabase
-            .from('gyms')
-            .insert({ 
-              name: newGymName,
-              email: user.email
-            });
-
-          if (insertError) {
-            console.error("Error creating gym:", insertError);
-            throw insertError;
-          }
-          
-          toast({
-            title: "Success",
-            description: "Gym created successfully",
-          });
-          setIsUpdatingName(false);
-          
-          // Force refresh the page to update the gym name in the header
-          window.location.reload();
-        } catch (error: any) {
-          console.error('Error creating gym:', error);
-          toast({
-            title: "Error",
-            description: `Failed to create gym: ${error.message || "Unknown error"}`,
-            variant: "destructive"
-          });
-        }
-      }
-    } catch (error: any) {
-      console.error('Error updating gym name:', error);
-      toast({
-        title: "Error",
-        description: `Failed to update gym settings: ${error.message || "Unknown error"}`,
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
+  const handleSettingsClick = () => {
+    navigate('/settings');
   };
 
   return (
@@ -206,39 +70,9 @@ const SettingsDropdown = ({ gymName: initialGymName }: SettingsDropdownProps) =>
               <p className="truncate">{user.email}</p>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Popover open={isUpdatingName} onOpenChange={setIsUpdatingName}>
-                <PopoverTrigger asChild>
-                  <button className="flex w-full cursor-default items-center px-2 py-1.5 text-sm">
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Gym Settings</span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80">
-                  <div className="space-y-4">
-                    <h4 className="font-medium leading-none">Gym Settings</h4>
-                    <div className="space-y-2">
-                      <Label htmlFor="gymName">Gym Name</Label>
-                      <Input 
-                        id="gymName" 
-                        value={newGymName} 
-                        onChange={(e) => setNewGymName(e.target.value)} 
-                        placeholder="Enter gym name"
-                        disabled={isLoading}
-                      />
-                    </div>
-                    <div className="flex justify-end">
-                      <Button 
-                        onClick={updateGymName} 
-                        className="bg-primary hover:bg-primary/90"
-                        disabled={isLoading || !newGymName.trim()}
-                      >
-                        {isLoading ? "Updating..." : "Update"}
-                      </Button>
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
+            <DropdownMenuItem onClick={handleSettingsClick} className="cursor-pointer">
+              <Settings className="mr-2 h-4 w-4" />
+              <span>Gym Settings</span>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleLogout} className="text-red-500 cursor-pointer">
               <LogOut className="mr-2 h-4 w-4" />

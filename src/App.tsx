@@ -15,6 +15,7 @@ import MembersPage from "./pages/MembersPage";
 import MemberDetailPage from "./pages/MemberDetailPage";
 import ScanPage from "./pages/ScanPage";
 import AccountPage from "./pages/AccountPage";
+import GymSettingsPage from "./pages/GymSettingsPage";
 import NotFound from "./pages/NotFound";
 import "./App.css";
 
@@ -77,6 +78,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <AccountPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <GymSettingsPage />
                     </ProtectedRoute>
                   }
                 />

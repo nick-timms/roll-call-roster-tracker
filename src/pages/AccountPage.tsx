@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { db } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { User, Settings, Users, Calendar } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const AccountPage: React.FC = () => {
   const { toast } = useToast();
@@ -111,7 +111,7 @@ const AccountPage: React.FC = () => {
             <CardTitle>Gym Information</CardTitle>
           </div>
           <CardDescription>
-            Manage your gym account information
+            View basic gym information. For detailed settings, visit the <Link to="/settings" className="text-primary hover:underline">Gym Settings</Link> page.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -153,10 +153,17 @@ const AccountPage: React.FC = () => {
               </Button>
             </>
           ) : (
-            <Button onClick={() => setEditing(true)} className="bg-primary hover:bg-primary/90">
-              <Settings className="mr-2 h-4 w-4" />
-              Edit Details
-            </Button>
+            <div className="flex space-x-3">
+              <Button onClick={() => setEditing(true)} className="bg-primary hover:bg-primary/90">
+                <Settings className="mr-2 h-4 w-4" />
+                Edit Basic Info
+              </Button>
+              <Button variant="outline" asChild>
+                <Link to="/settings">
+                  Advanced Settings
+                </Link>
+              </Button>
+            </div>
           )}
         </CardFooter>
       </Card>
