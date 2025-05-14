@@ -19,18 +19,21 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 const LoginPage = () => {
-  const { signIn, user } = useAuth();
+  const { signIn, user, isLoading: authLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [redirected, setRedirected] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   
   // Effect to check if user is already logged in and redirect
   useEffect(() => {
-    if (user) {
+    // Only redirect if user exists and we haven't redirected already
+    if (user && !redirected && !isLoading) {
+      setRedirected(true);
       navigate('/dashboard', { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, redirected, isLoading]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -41,12 +44,14 @@ const LoginPage = () => {
   });
 
   const onSubmit = async (data: LoginFormValues) => {
+    if (isLoading) return; // Prevent multiple submission
+    
     setIsLoading(true);
     setError(null);
     
     try {
       await signIn(data.email, data.password);
-      // The redirect is now handled in the useEffect above
+      // The redirect is handled in the signIn function and useEffect above
     } catch (error: any) {
       setError(error.message || 'Failed to sign in');
     } finally {
@@ -54,8 +59,8 @@ const LoginPage = () => {
     }
   };
 
-  // Don't render the form if user is already logged in
-  if (user) {
+  // Don't render the form if user is already logged in and we're in the process of redirecting
+  if (user && !isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>

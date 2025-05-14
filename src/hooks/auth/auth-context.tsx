@@ -13,6 +13,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authInitialized, setAuthInitialized] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -20,6 +21,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log("Auth state change event:", event);
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -39,10 +41,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Then check for existing session
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setUser(session?.user ?? null);
+      } catch (error) {
+        console.error("Error checking session:", error);
+      } finally {
+        setIsLoading(false);
+        setAuthInitialized(true);
+      }
     };
     
     checkSession();
@@ -105,43 +113,50 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(true);
       console.log("Signing in user:", email);
       
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error, data } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       
       if (error) throw error;
       
-      // Always ensure the user has a gym, but don't block on it
-      try {
-        // Don't await this - we don't want to block the signin flow
-        ensureGymExists(email).catch(gymError => {
-          console.warn("Could not ensure gym exists during sign in");
-          // No need to show an error to the user
-        });
-      } catch (gymError) {
-        console.error('Error ensuring gym exists:', gymError);
-      } finally {
-        // Always navigate to dashboard with enough delay to ensure state is updated
+      // Only redirect if the sign-in was successful
+      if (data.session) {
+        // Always ensure the user has a gym, but don't block on it
+        try {
+          // Don't await this - we don't want to block the signin flow
+          ensureGymExists(email).catch(gymError => {
+            console.warn("Could not ensure gym exists during sign in");
+          });
+        } catch (gymError) {
+          console.error('Error ensuring gym exists:', gymError);
+        }
+
+        // Navigate after a short delay to ensure state is updated
         setTimeout(() => {
           navigate('/dashboard', { replace: true });
-        }, 200);
+        }, 300);
       }
     } catch (error: any) {
-      setIsLoading(false);
       toast({
         title: "Error signing in",
         description: error.message,
         variant: "destructive",
       });
       throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const signOut = async () => {
     try {
       setIsLoading(true);
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) throw error;
+      
+      // Only navigate after successful sign out
       navigate('/login', { replace: true });
     } catch (error: any) {
       toast({

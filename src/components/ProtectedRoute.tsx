@@ -1,10 +1,19 @@
 
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
+import { useState, useEffect } from "react";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
   const location = useLocation();
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+  
+  useEffect(() => {
+    // Only set redirect state once loading is complete and we know user is null
+    if (!isLoading && !user) {
+      setShouldRedirect(true);
+    }
+  }, [isLoading, user]);
   
   if (isLoading) {
     return (
@@ -15,7 +24,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     );
   }
   
-  if (!user) {
+  if (shouldRedirect) {
     // Use replace: true to prevent building up history stack
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
