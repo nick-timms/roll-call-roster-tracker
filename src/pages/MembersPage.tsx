@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -37,7 +37,7 @@ const MembersPage: React.FC = () => {
   });
   
   // Fetch the gym data
-  const { data: gymData, isLoading: isLoadingGym } = useQuery({
+  const { data: gymData, isLoading: isLoadingGym, error: gymError } = useQuery({
     queryKey: ['gym'],
     queryFn: async () => {
       if (!user?.email) throw new Error("User is not logged in");
@@ -58,10 +58,12 @@ const MembersPage: React.FC = () => {
         throw new Error("No gym found for this user");
       }
       
+      console.log("Found gym data:", data);
       return data;
     },
-    enabled: !!user,
-    retry: 1,
+    enabled: !!user?.email,
+    retry: 2,  // Increase retry attempts
+    staleTime: 60000, // 1 minute
   });
   
   // Fetch members data
@@ -170,6 +172,44 @@ const MembersPage: React.FC = () => {
            member.email.toLowerCase().includes(searchQuery.toLowerCase());
   });
   
+  // Create a gym if none found (shouldn't happen with the signup flow, but just in case)
+  const createDefaultGym = async () => {
+    if (!user?.email) return;
+    
+    try {
+      const gymName = "My Gym"; // Default name
+      const { data, error } = await supabase
+        .from('gyms')
+        .insert({
+          name: gymName,
+          email: user.email,
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error creating default gym:', error);
+        toast({
+          title: "Error",
+          description: "Failed to create gym",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      toast({
+        title: 'Gym Created',
+        description: 'Your gym has been set up successfully.'
+      });
+      
+      // Refresh gym data
+      queryClient.invalidateQueries({ queryKey: ['gym'] });
+      
+    } catch (error) {
+      console.error('Failed to create default gym:', error);
+    }
+  };
+  
   // Show a message if gym data is still loading or not found
   if (isLoadingGym) {
     return (
@@ -184,16 +224,16 @@ const MembersPage: React.FC = () => {
     );
   }
   
-  if (!gymData) {
+  if (gymError || !gymData) {
     return (
       <div className="space-y-6 pb-16">
         <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
           <h1 className="text-2xl font-bold text-zinc-900">Members</h1>
         </div>
         <div className="py-12 text-center bg-white rounded-xl border border-zinc-200 shadow-sm">
-          <p className="text-zinc-500">No gym found. Please set up your gym in the dashboard.</p>
-          <Button onClick={() => navigate('/dashboard')} className="mt-4 bg-primary hover:bg-primary/90">
-            Go to Dashboard
+          <p className="text-zinc-500 mb-4">No gym found. Let's set up your gym now.</p>
+          <Button onClick={createDefaultGym} className="mt-4 bg-primary hover:bg-primary/90">
+            Create My Gym
           </Button>
         </div>
       </div>
