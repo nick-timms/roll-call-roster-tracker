@@ -1,6 +1,5 @@
-
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/components/ui/use-toast';
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import { GymDetails } from './types';
 
 /**
@@ -67,45 +66,73 @@ export const ensureGymExists = async (email: string, preferredGymName: string = 
 /**
  * Creates a default gym for a user with robust error handling
  */
-export const createDefaultGym = async (email: string): Promise<GymDetails> => {
-  if (!email) {
-    throw new Error("Email is required to create a default gym");
+export const createDefaultGym = async () => {
+  try {
+    // Get the currently logged-in user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError) {
+      console.error("Error getting user:", userError);
+      return;
+    }
+    
+    if (!user) {
+      console.log("No user is logged in");
+      return;
+    }
+    
+    // Check if gym already exists for this user's email
+    const { data: existingGym, error: existingGymError } = await supabase
+      .from('gyms')
+      .select('*')
+      .eq('email', user.email)
+      .maybeSingle();
+      
+    if (existingGymError) {
+      console.error("Error checking for existing gym:", existingGymError);
+      return;
+    }
+    
+    if (existingGym) {
+      console.log("Gym already exists for this user");
+      return existingGym;
+    }
+    
+    // Create a new gym with user's email
+    const { data: newGym, error: createGymError } = await supabase
+      .from('gyms')
+      .insert([
+        { 
+          name: "My Gym", 
+          email: user.email,
+        }
+      ])
+      .select()
+      .single();
+    
+    if (createGymError) {
+      console.error("Error creating default gym:", createGymError);
+      toast({
+        title: "Error",
+        description: "Failed to create default gym",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    toast({
+      title: "Success", 
+      description: "Default gym created successfully"
+    });
+    
+    return newGym;
+    
+  } catch (error) {
+    console.error("Failed to create default gym:", error);
+    toast({
+      title: "Error",
+      description: "An unexpected error occurred",
+      variant: "destructive"
+    });
   }
-  
-  console.log(`Creating default gym for ${email}`);
-  
-  // First check if a gym already exists for this email
-  const { data: existingGyms, error: checkError } = await supabase
-    .from('gyms')
-    .select('id, name')
-    .eq('email', email)
-    .maybeSingle();
-  
-  if (checkError) {
-    console.error('Error checking for existing gym:', checkError);
-    throw new Error(`Failed to check for existing gym: ${checkError.message}`);
-  }
-  
-  if (existingGyms) {
-    console.log('Found existing gym:', existingGyms.id);
-    return existingGyms;
-  }
-  
-  // If no gym exists, try to create one
-  const { data, error } = await supabase
-    .from('gyms')
-    .insert({
-      name: 'My Gym',
-      email: email,
-    })
-    .select('id, name')
-    .single();
-  
-  if (error) {
-    console.error('Error creating default gym:', error);
-    throw new Error(`Failed to create default gym: ${error.message}`);
-  }
-  
-  console.log('Created new gym:', data.id);
-  return data;
 };

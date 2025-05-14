@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { generateQRCode } from '@/lib/utils';
 import { Member } from '@/types';
 import { Users, UserPlus, Search, QrCode } from 'lucide-react';
-import { toast } from '@/components/ui/toaster';
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/auth/use-auth';
@@ -31,11 +32,12 @@ const MembersPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // Fetch members using react-query
-  const { data: members, isLoading, isError } = useQuery<Member[], Error>(
-    'members',
-    async () => {
+  const { data: members, isLoading, isError } = useQuery({
+    queryKey: ['members'],
+    queryFn: async () => {
       if (!user?.email) return [];
 
       const { data, error } = await supabase
@@ -49,7 +51,7 @@ const MembersPage: React.FC = () => {
       }
       return data || [];
     }
-  );
+  });
 
   useEffect(() => {
     if (!user?.email) {
@@ -59,13 +61,19 @@ const MembersPage: React.FC = () => {
   }, [user]);
 
   // Mutation for adding a new member
-  const addMemberMutation = useMutation(
-    async (newMemberName: string) => {
+  const addMemberMutation = useMutation({
+    mutationFn: async (newMemberName: string) => {
       if (!user?.email) throw new Error("User email not found");
 
       const { data, error } = await supabase
         .from('members')
-        .insert([{ name: newMemberName, gym_id: user.email }]);
+        .insert({
+          first_name: newMemberName,
+          last_name: '',
+          email: '',
+          gym_id: user.email,
+          qr_code: ''
+        });
 
       if (error) {
         console.error("Error adding member:", error);
@@ -73,27 +81,25 @@ const MembersPage: React.FC = () => {
       }
       return data;
     },
-    {
-      onSuccess: () => {
-        // Invalidate and refetch members
-        queryClient.invalidateQueries('members');
-        toast({
-          title: "Success",
-          description: "Member added successfully",
-        });
-        setNewMemberName('');
-        setIsDialogOpen(false);
-      },
-      onError: (error: any) => {
-        toast({
-          title: "Error",
-          description: "Failed to add member",
-          variant: "destructive"
-        });
-        console.error("Error adding member:", error);
-      }
+    onSuccess: () => {
+      // Invalidate and refetch members
+      queryClient.invalidateQueries({ queryKey: ['members'] });
+      toast({
+        title: "Success",
+        description: "Member added successfully",
+      });
+      setNewMemberName('');
+      setIsDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: "Failed to add member",
+        variant: "destructive"
+      });
+      console.error("Error adding member:", error);
     }
-  );
+  });
 
   // Handlers
   const handleOpenDialog = () => setIsDialogOpen(true);
@@ -101,12 +107,13 @@ const MembersPage: React.FC = () => {
 
   const handleAddMember = async () => {
     if (newMemberName.trim() === '') return;
-    await addMemberMutation.mutateAsync(newMemberName);
+    await addMemberMutation.mutate(newMemberName);
   };
 
   const filteredMembers = members
     ? members.filter(member =>
-        member.name.toLowerCase().includes(searchQuery.toLowerCase())
+        member.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        member.last_name?.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : [];
 
@@ -164,7 +171,7 @@ const MembersPage: React.FC = () => {
           <Card key={member.id} className="bg-white shadow-md rounded-md">
             <CardContent className="p-4">
               <Link to={`/members/${member.id}`} className="block hover:underline">
-                <h2 className="text-lg font-semibold text-gray-800">{member.name}</h2>
+                <h2 className="text-lg font-semibold text-gray-800">{member.first_name} {member.last_name}</h2>
               </Link>
               <div className="flex justify-between mt-4">
                 <Button
@@ -214,8 +221,8 @@ const MembersPage: React.FC = () => {
             <Button type="button" variant="secondary" onClick={handleCloseDialog}>
               Cancel
             </Button>
-            <Button type="submit" onClick={handleAddMember} disabled={addMemberMutation.isLoading}>
-              {addMemberMutation.isLoading ? "Adding..." : "Add Member"}
+            <Button type="submit" onClick={handleAddMember} disabled={addMemberMutation.isPending}>
+              {addMemberMutation.isPending ? "Adding..." : "Add Member"}
             </Button>
           </DialogFooter>
         </DialogContent>
