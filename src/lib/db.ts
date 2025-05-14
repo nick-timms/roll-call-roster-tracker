@@ -1,4 +1,3 @@
-
 import { Gym, Member, AttendanceRecord } from "@/types";
 
 // Fake database using localStorage

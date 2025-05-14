@@ -1,4 +1,3 @@
-
 export interface Gym {
   id: string;
   name: string;
@@ -8,16 +7,14 @@ export interface Gym {
 
 export interface Member {
   id: string;
-  gymId: string;
   firstName: string;
   lastName: string;
-  email: string;
-  phone?: string;
+  email?: string;
   phoneNumber?: string;
+  phone?: string;
   belt?: string;
-  membershipType?: string;
-  membership_status?: string; // Add this property
-  notes?: string; // Add this property
+  membership_status?: string;
+  notes?: string;
   qrCode: string;
   createdAt: string;
 }
@@ -25,8 +22,8 @@ export interface Member {
 export interface AttendanceRecord {
   id: string;
   memberId: string;
-  date: string; // format: YYYY-MM-DD
+  date: string;
   timeIn: string;
-  timeOut?: string; // Add this property
+  timeOut?: string;
   notes?: string;
 }
