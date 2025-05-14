@@ -10,8 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
 
 const signupSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -46,11 +44,9 @@ const SignupPage = () => {
     setError(null);
     
     try {
+      console.log("Submitting signup with gym name:", data.gymName);
       await signUp(data.email, data.password, data.gymName);
-      
-      // The signup and login is handled in auth context
-      // A default gym will be created after first login
-      
+      // The signup, gym creation and login is handled in auth context
     } catch (error: any) {
       setError(error.message || 'Failed to create account');
     } finally {
