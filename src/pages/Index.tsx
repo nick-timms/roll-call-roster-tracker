@@ -13,9 +13,9 @@ const Index = () => {
     }
     
     if (!user) {
-      navigate('/login');
+      navigate('/login', { replace: true });
     } else {
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     }
   }, [user, navigate, isLoading]);
   

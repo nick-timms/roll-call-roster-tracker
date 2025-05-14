@@ -16,6 +16,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
   
   if (!user) {
+    // Use replace: true to prevent building up history stack
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   

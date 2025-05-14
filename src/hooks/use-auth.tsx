@@ -44,11 +44,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     );
 
     // Then check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
-    });
+    };
+    
+    checkSession();
 
     return () => {
       subscription.unsubscribe();
@@ -57,6 +60,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string) => {
     try {
+      setIsLoading(true);
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -69,22 +73,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         description: "Check your email for a confirmation link",
       });
 
-      // Create default gym for the new user after signup
-      try {
-        const { error: gymError } = await supabase
-          .from('gyms')
-          .insert({
-            name: 'My Gym',
-            email: email,
-          });
-          
-        if (gymError) {
-          console.error('Error creating default gym:', gymError);
-        }
-      } catch (createGymError) {
-        console.error('Failed to create default gym:', createGymError);
-      }
-
       // Auto sign in for better user experience
       await signIn(email, password);
     } catch (error: any) {
@@ -94,11 +82,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         variant: "destructive",
       });
       throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const createDefaultGym = async (email: string) => {
+    try {
+      const { error: gymError } = await supabase
+        .from('gyms')
+        .insert({
+          name: 'My Gym',
+          email: email,
+        });
+        
+      if (gymError) {
+        console.error('Error creating default gym:', gymError);
+        return false;
+      }
+      
+      toast({
+        title: 'Default gym created',
+        description: 'You can change the name in Account settings.'
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to create default gym:', error);
+      return false;
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
+      setIsLoading(true);
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -119,35 +136,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
 
         if (!gyms || gyms.length === 0) {
-          const { error: gymError } = await supabase
-            .from('gyms')
-            .insert({
-              name: 'My Gym',
-              email: email,
-            });
-            
-          if (gymError) {
-            console.error('Error creating default gym:', gymError);
-          } else {
-            toast({
-              title: 'Default gym created',
-              description: 'You can change the name in Account settings.'
-            });
-          }
+          await createDefaultGym(email);
         }
-        
-        // Navigate to dashboard with a slight delay to ensure state updates
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 100);
       } catch (error) {
         console.error('Failed during gym check/creation:', error);
-        // Still navigate to dashboard even if gym check fails
+      } finally {
+        // Always navigate to dashboard with enough delay to ensure state is updated
         setTimeout(() => {
-          navigate('/dashboard');
-        }, 100);
+          navigate('/dashboard', { replace: true });
+        }, 200);
       }
     } catch (error: any) {
+      setIsLoading(false);
       toast({
         title: "Error signing in",
         description: error.message,
@@ -159,14 +159,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
+      setIsLoading(true);
       await supabase.auth.signOut();
-      navigate('/login');
+      navigate('/login', { replace: true });
     } catch (error: any) {
       toast({
         title: "Error signing out",
         description: error.message,
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
