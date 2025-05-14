@@ -110,10 +110,13 @@ const MembersPage: React.FC = () => {
         };
         
         console.log("Submitting new member to Supabase:", newMember);
-        console.log("Supabase client config:", {
-          headers: session ? "Auth headers present" : "No auth headers"
+        console.log("Supabase URL:", SUPABASE_URL);
+        console.log("Auth state:", { 
+          session: session ? "Present" : "Missing",
+          accessToken: session?.access_token ? "Present" : "Missing"
         });
         
+        // Create fetch options with explicit headers
         const { data, error, status, statusText } = await supabase
           .from('members')
           .insert([newMember])

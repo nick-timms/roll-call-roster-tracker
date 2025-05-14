@@ -20,18 +20,31 @@ export const supabase = createClient<Database>(
     },
     global: {
       headers: {
-        'apikey': SUPABASE_PUBLISHABLE_KEY
+        'apikey': SUPABASE_PUBLISHABLE_KEY,
+        'Content-Type': 'application/json'
       },
-      fetch: (...args) => {
-        const [url, options] = args;
+      fetch: (url, options = {}) => {
         const fetchOptions = {
           ...options,
           headers: {
             ...(options?.headers || {}),
             'apikey': SUPABASE_PUBLISHABLE_KEY,
+            'Content-Type': 'application/json'
           }
         };
-        return fetch(url, fetchOptions);
+        
+        console.log('Supabase fetch URL:', url);
+        console.log('Fetch options:', JSON.stringify(fetchOptions, null, 2));
+        
+        return fetch(url, fetchOptions)
+          .then(response => {
+            console.log(`Response status for ${url}: ${response.status}`);
+            return response;
+          })
+          .catch(error => {
+            console.error(`Fetch error for ${url}:`, error);
+            throw error;
+          });
       }
     }
   }
