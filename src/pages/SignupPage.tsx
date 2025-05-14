@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 
 const signupSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -26,6 +28,7 @@ const SignupPage = () => {
   const { signUp } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -42,7 +45,10 @@ const SignupPage = () => {
     
     try {
       await signUp(data.email, data.password);
-      // Redirection is handled in the auth context
+      
+      // The signup and login is handled in auth context
+      // A default gym will be created after first login
+      
     } catch (error: any) {
       setError(error.message || 'Failed to create account');
     } finally {

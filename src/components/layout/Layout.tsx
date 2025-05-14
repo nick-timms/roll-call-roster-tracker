@@ -1,16 +1,15 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { db } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   Calendar, 
   Users, 
   QrCode, 
   User,
-  ArrowRight,
   LogOut,
   LayoutDashboard
 } from 'lucide-react';
@@ -20,30 +19,52 @@ const Layout: React.FC = () => {
   const location = useLocation();
   const { toast } = useToast();
   const { user, signOut } = useAuth();
-  const gym = db.getGym();
+  const [gymName, setGymName] = useState('Your Gym');
+  
+  useEffect(() => {
+    const fetchGymDetails = async () => {
+      if (!user) return;
+      
+      const { data: gyms, error } = await supabase
+        .from('gyms')
+        .select('name')
+        .eq('email', user.email)
+        .limit(1);
+        
+      if (error) {
+        console.error('Error fetching gym:', error);
+        return;
+      }
+      
+      if (gyms && gyms.length > 0) {
+        setGymName(gyms[0].name);
+      }
+    };
+    
+    fetchGymDetails();
+  }, [user]);
 
-  const handleLogout = () => {
-    if (confirm("Are you sure you want to log out? This is a demo app, so all data will be lost.")) {
-      db.clearAll();
-      signOut();
-      toast({
-        title: "Logged out",
-        description: "You have been logged out of the system",
-      });
+  const handleLogout = async () => {
+    if (confirm("Are you sure you want to log out?")) {
+      try {
+        await signOut();
+        toast({
+          title: "Logged out",
+          description: "You have been logged out of the system",
+        });
+      } catch (error) {
+        console.error('Error signing out:', error);
+      }
     }
   };
 
   const isActive = (path: string) => location.pathname === path;
 
-  if (!gym && location.pathname !== '/' && !location.pathname.includes('/setup')) {
-    // Redirect to setup if no gym is set up
-    navigate('/setup');
-    return null;
-  }
-
+  // If user is not authenticated and not on login/signup page, redirect will be handled by ProtectedRoute
+  
   return (
     <div className="min-h-screen flex flex-col bg-zinc-50">
-      {gym && (
+      {user && (
         <header className="bg-white border-b border-zinc-200 shadow-sm sticky top-0 z-10">
           <div className="container mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -52,7 +73,7 @@ const Layout: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-zinc-900">MatTrack</h1>
-                <p className="text-xs text-zinc-500">{gym.name}</p>
+                <p className="text-xs text-zinc-500">{gymName}</p>
               </div>
             </div>
             <div className="flex space-x-3">
@@ -73,7 +94,7 @@ const Layout: React.FC = () => {
       )}
       
       <div className="flex flex-1">
-        {gym && (
+        {user && (
           <aside className="hidden md:block w-56 bg-zinc-50 border-r border-zinc-200 p-4 sticky top-16 h-[calc(100vh-4rem)]">
             <nav className="space-y-1.5">
               <Link to="/dashboard">
@@ -126,7 +147,7 @@ const Layout: React.FC = () => {
       </div>
       
       {/* Mobile Navigation */}
-      {gym && user && (
+      {user && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 p-1 shadow-md z-10">
           <div className="flex justify-around">
             <Link to="/dashboard" className="flex flex-col items-center p-2">

@@ -1,7 +1,6 @@
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '@/lib/db';
 import { useAuth } from '@/hooks/use-auth';
 
 const Index = () => {
@@ -18,15 +17,9 @@ const Index = () => {
       return;
     }
     
-    // Check if gym exists once we know the user is authenticated
-    const gym = db.getGym();
+    // User is authenticated, redirect directly to dashboard
+    navigate('/dashboard');
     
-    // If gym exists, redirect to dashboard, otherwise stay on the setup page
-    if (gym) {
-      navigate('/dashboard');
-    } else {
-      navigate('/setup');
-    }
   }, [user, navigate, isLoading]);
   
   return null; // This component doesn't render anything, it's just for redirection

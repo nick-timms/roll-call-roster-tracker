@@ -8,7 +8,6 @@ import { AuthProvider } from "@/hooks/use-auth";
 import Layout from "./components/layout/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Index from "./pages/Index";
-import SetupPage from "./pages/SetupPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -42,7 +41,6 @@ const App = () => (
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/" element={<Layout />}>
               <Route index element={<Index />} />
-              <Route path="/setup" element={<SetupPage />} />
               <Route
                 path="/dashboard"
                 element={

@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -22,6 +24,7 @@ const LoginPage = () => {
   const { signIn } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -37,6 +40,33 @@ const LoginPage = () => {
     
     try {
       await signIn(data.email, data.password);
+      
+      // Check if user has a gym, if not create a default one
+      const { data: gyms } = await supabase
+        .from('gyms')
+        .select('id')
+        .eq('email', data.email)
+        .limit(1);
+        
+      if (!gyms || gyms.length === 0) {
+        const { error: gymError } = await supabase
+          .from('gyms')
+          .insert({
+            name: 'My Gym',
+            email: data.email,
+          });
+          
+        if (gymError) {
+          console.error('Error creating default gym:', gymError);
+        } else {
+          toast({
+            title: 'Default gym created',
+            description: 'You can change the name in Account settings.'
+          });
+        }
+      }
+      
+      // Redirect will be handled by useAuth
     } catch (error: any) {
       setError(error.message || 'Failed to sign in');
     } finally {
