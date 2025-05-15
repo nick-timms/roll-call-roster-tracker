@@ -3,8 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Sidebar } from '@/components/ui/sidebar';
-import { SettingsDropdown } from './SettingsDropdown';
-import { useMobile } from '@/hooks/use-mobile';
+import SettingsDropdown from './SettingsDropdown';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/integrations/supabase/client';
 import { GymLogo } from '../GymLogo'; 
@@ -13,7 +13,7 @@ const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, signOut } = useAuth();
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [gymName, setGymName] = useState('');
 
@@ -77,7 +77,7 @@ const Layout = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)}>
+      <div className={`bg-white border-r border-gray-200 ${sidebarOpen ? 'block' : 'hidden'} md:block w-64 flex-shrink-0`}>
         <div className="flex flex-col h-full">
           <div className="p-4 border-b">
             <GymLogo gymName={gymName || "MatTrack"} />
@@ -125,7 +125,7 @@ const Layout = () => {
             </Button>
           </div>
         </div>
-      </Sidebar>
+      </div>
       
       {/* Main content */}
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
@@ -158,7 +158,7 @@ const Layout = () => {
             </div>
             
             <div className="flex items-center">
-              <SettingsDropdown onSignOut={handleSignOut} />
+              <SettingsDropdown gymName={gymName || "MatTrack"} />
             </div>
           </div>
         </header>

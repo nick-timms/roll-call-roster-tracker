@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -25,7 +24,7 @@ import {
 } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/auth/use-auth';
-import { getGymIdByEmail, testDatabaseAccess, ensureGymExists } from '@/hooks/auth/gym-service';
+import { getGymIdByUserId, testDatabaseAccess, ensureGymExists } from '@/hooks/auth/gym-service';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,8 +57,8 @@ const MembersPage: React.FC = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        if (!user?.email) {
-          console.log("No user email found");
+        if (!user?.id) {
+          console.log("No user ID found");
           setAuthStatus("no_user");
           return;
         }
@@ -93,19 +92,19 @@ const MembersPage: React.FC = () => {
     };
     
     checkAuth();
-  }, [user?.email]);
+  }, [user?.id]);
 
   // Fetch gym ID on component mount
   useEffect(() => {
     const fetchGymId = async () => {
-      if (!user?.email) {
-        console.log("No user email found, cannot fetch gym ID");
+      if (!user?.id) {
+        console.log("No user ID found, cannot fetch gym ID");
         return;
       }
       
       try {
-        console.log("Fetching gym ID for user:", user.email);
-        const id = await getGymIdByEmail(user.email);
+        console.log("Fetching gym ID for user:", user.id);
+        const id = await getGymIdByUserId(user.id);
         console.log("Fetched gym ID:", id);
         
         if (id) {
@@ -113,7 +112,8 @@ const MembersPage: React.FC = () => {
         } else {
           // If no gym ID is found, try to create one
           console.log("No gym ID found, creating one");
-          const newGym = await ensureGymExists(user.email);
+          const gymName = user.email ? user.email.split('@')[0] + "'s Gym" : "My Gym";
+          const newGym = await ensureGymExists(user.id, user.email || '', gymName);
           if (newGym?.id) {
             console.log("Created new gym with ID:", newGym.id);
             setGymId(newGym.id);
@@ -137,7 +137,7 @@ const MembersPage: React.FC = () => {
     };
     
     fetchGymId();
-  }, [user?.email, toast]);
+  }, [user?.id, toast, user?.email]);
 
   // Handler to manually refresh authentication
   const handleRefreshAuth = async () => {
@@ -181,8 +181,8 @@ const MembersPage: React.FC = () => {
   const { data: members, isLoading, isError, error } = useQuery({
     queryKey: ['members', gymId],
     queryFn: async () => {
-      if (!user?.email || !gymId) {
-        console.log("No user email or gym ID found, cannot fetch members");
+      if (!user?.id || !gymId) {
+        console.log("No user ID or gym ID found, cannot fetch members");
         return [];
       }
 
@@ -256,7 +256,7 @@ const MembersPage: React.FC = () => {
     mutationFn: async (newMemberName: string) => {
       console.log("Starting member creation process");
       
-      if (!user?.email) {
+      if (!user?.id) {
         throw new Error("You must be logged in to add members");
       }
       
@@ -467,7 +467,7 @@ const MembersPage: React.FC = () => {
   }
 
   // Loading state when waiting for gym ID
-  if (!gymId && user?.email) {
+  if (!gymId && user?.id) {
     return (
       <div className="p-6 flex items-center justify-center h-64">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
