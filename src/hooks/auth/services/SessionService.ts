@@ -42,24 +42,25 @@ export class SessionService {
   static async refreshSession() {
     try {
       console.log("SessionService: Attempting to refresh session");
-      const { data, error } = await refreshSession();
+      const result = await refreshSession();
       
-      if (error) {
-        console.error("SessionService: Error refreshing session:", error);
+      // The refreshSession function actually returns an object with data and error, not a boolean
+      if (result.error) {
+        console.error("SessionService: Error refreshing session:", result.error);
         return { success: false, session: null };
       }
       
-      console.log(`SessionService: Session refresh successful: ${!!data.session}`);
+      console.log(`SessionService: Session refresh successful: ${!!result.data.session}`);
       
       // Log updated token expiry
-      if (data.session?.expires_at) {
-        const expiresAt = new Date(data.session.expires_at * 1000).toISOString();
+      if (result.data.session?.expires_at) {
+        const expiresAt = new Date(result.data.session.expires_at * 1000).toISOString();
         console.log("SessionService: New token expires at:", expiresAt);
       }
       
       return {
         success: true,
-        session: data.session,
+        session: result.data.session,
       };
     } catch (error: any) {
       console.error("SessionService: Exception refreshing session:", error);
