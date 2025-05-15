@@ -40,8 +40,11 @@ const Index = () => {
       if (status === AuthStatus.AUTHENTICATED) {
         console.log("Index page: Redirecting to dashboard");
         navigate('/dashboard', { replace: true });
+      } else if (status === AuthStatus.ERROR) {
+        console.log("Index page: Auth error, redirecting to login");
+        navigate('/login', { replace: true });
       } else {
-        console.log("Index page: Redirecting to login");
+        console.log("Index page: Not authenticated, redirecting to login");
         navigate('/login', { replace: true });
       }
     }
@@ -53,7 +56,11 @@ const Index = () => {
   return (
     <div className="flex h-screen items-center justify-center">
       <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-      <span className="ml-3 text-gray-600">Verifying authentication...</span>
+      <span className="ml-3 text-gray-600">
+        {status === AuthStatus.ERROR 
+          ? "Authentication error. Redirecting to login..." 
+          : "Verifying authentication..."}
+      </span>
     </div>
   );
 };

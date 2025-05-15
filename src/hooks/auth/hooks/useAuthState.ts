@@ -33,7 +33,7 @@ export const useAuthState = () => {
       user,
       session,
       isLoading: false,
-      isInitialized: true,
+      isInitialized: true, // Always ensure initialized is set to true
       lastTokenRefresh: session ? Date.now() : 0,
     });
   }, [updateAuthState]);
@@ -88,7 +88,7 @@ export const useAuthState = () => {
             code: 'session_error',
             context: 'initial_load'
           });
-          setUserAndSession(null, null);
+          setUserAndSession(null, null); // This will now set isInitialized to true
           return;
         }
         
@@ -96,7 +96,25 @@ export const useAuthState = () => {
         console.log("useAuthState: Initial session loaded", { hasSession: !!session });
       } catch (error) {
         console.error("useAuthState: Exception getting initial session:", error);
-        setUserAndSession(null, null);
+        
+        // Manually ensure initialization happens even with catastrophic errors
+        updateAuthState({
+          user: null,
+          session: null,
+          isLoading: false,
+          isInitialized: true,
+          error: {
+            message: error instanceof Error ? error.message : 'Unknown authentication error',
+            code: 'auth_exception',
+            context: 'initial_load'
+          }
+        });
+      } finally {
+        // As an extra safeguard, ensure isInitialized is always set to true
+        // after the initial session check, regardless of outcome
+        if (!authState.isInitialized) {
+          updateAuthState({ isInitialized: true });
+        }
       }
     };
     
@@ -106,7 +124,7 @@ export const useAuthState = () => {
       subscription.unsubscribe();
       console.log("useAuthState: Auth subscription unsubscribed");
     };
-  }, [setUserAndSession, setError, setTokenRefresh]);
+  }, [setUserAndSession, setError, setTokenRefresh, updateAuthState, authState.isInitialized]);
   
   return {
     ...authState,
