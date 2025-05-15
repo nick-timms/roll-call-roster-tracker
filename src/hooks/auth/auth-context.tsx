@@ -157,8 +157,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           // Clear session data from localStorage on sign out
           if (typeof localStorage !== 'undefined') {
             try {
-              // Get the Supabase URL from client.ts
-              const projectRef = supabase.supabaseUrl.split('//')[1].split('.')[0];
+              // Get the project ref from the Supabase project URL in client.ts
+              const projectRef = 'ktwcyzsxzivlibsaschj'; // Hardcoded project ref from client.ts
               // Clear Supabase specific token
               localStorage.removeItem(`sb-${projectRef}-auth-token`);
               console.log("Removed session from localStorage during sign out");
@@ -426,8 +426,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Manually clear session storage as a backup
       if (typeof localStorage !== 'undefined') {
         try {
-          // Get the project ref from the Supabase URL
-          const projectRef = supabase.supabaseUrl.split('//')[1].split('.')[0];
+          // Use hardcoded project ref from client.ts
+          const projectRef = 'ktwcyzsxzivlibsaschj';
           localStorage.removeItem(`sb-${projectRef}-auth-token`);
           console.log("Removed session from localStorage during manual sign out");
         } catch (err) {
