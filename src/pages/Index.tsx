@@ -1,24 +1,34 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/auth/hooks/useAuth';
+import { useAuth } from '@/hooks/use-auth';
 import { AuthStatus } from '@/hooks/auth/types';
 
 const Index = () => {
   const navigate = useNavigate();
   const { user, session, isLoading, status } = useAuth();
-  const [hasRedirected, setHasRedirected] = useState(false);
+  const [redirectAttempted, setRedirectAttempted] = useState(false);
   
   useEffect(() => {
-    // Only redirect once auth state is fully determined and we haven't redirected yet
-    if (!isLoading && !hasRedirected) {
-      setHasRedirected(true); // Prevent multiple redirects
-      
+    // Set a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (!redirectAttempted) {
+        console.log("Index page: Timeout reached, forcing navigation");
+        setRedirectAttempted(true);
+        navigate('/login', { replace: true });
+      }
+    }, 3000); // 3 second timeout
+    
+    // Only redirect once auth state is determined
+    if (!isLoading && !redirectAttempted) {
       console.log("Index page: Authentication status", { 
         status, 
         hasUser: !!user, 
-        hasSession: !!session
+        hasSession: !!session,
+        isLoading
       });
+      
+      setRedirectAttempted(true); // Mark that we've attempted a redirect
       
       if (user && session) {
         console.log("Index page: Redirecting to dashboard");
@@ -28,7 +38,9 @@ const Index = () => {
         navigate('/login', { replace: true });
       }
     }
-  }, [user, session, navigate, isLoading, hasRedirected, status]);
+    
+    return () => clearTimeout(timeoutId);
+  }, [user, session, navigate, isLoading, redirectAttempted, status]);
   
   // Return a loading indicator while auth state is being determined
   return (

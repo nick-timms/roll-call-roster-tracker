@@ -1,11 +1,10 @@
 
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "@/hooks/auth/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { SessionService } from "@/hooks/auth/services/SessionService";
 import { UserService } from "@/hooks/auth/services/UserService";
-import { AuthStatus } from "@/hooks/auth/types";
 import { useToast } from "@/hooks/use-toast";
 
 interface ProtectedRouteProps {
@@ -122,7 +121,18 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
       }
     };
     
+    // Set a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (isCheckingAuth) {
+        console.warn("Protected route: Authentication check timed out");
+        setIsCheckingAuth(false);
+        setShouldRedirect(true);
+      }
+    }, 5000); // 5 second timeout
+    
     checkAuth();
+    
+    return () => clearTimeout(timeoutId);
   }, [isLoading, user, session, recoverDatabaseConnection, location.pathname, requireAdmin, toast, status]);
   
   // Show loading state while checking auth
