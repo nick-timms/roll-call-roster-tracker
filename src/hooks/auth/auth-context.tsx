@@ -1,7 +1,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase, logAuthState, refreshSession } from '@/integrations/supabase/client';
+import { supabase, logAuthState, refreshSession, diagnoseDatabaseConnection } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
 import { useToast } from "@/hooks/use-toast";
 import { AuthContextType } from './types';
@@ -14,19 +14,92 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authInitialized, setAuthInitialized] = useState(false);
+  const [lastTokenRefresh, setLastTokenRefresh] = useState<number>(0);
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Refresh the session every 10 minutes to ensure the token stays valid
+  // Force token refresh when database connections fail
+  const tryDatabaseRecovery = async () => {
+    console.log("Attempting database connection recovery...");
+    
+    // Don't attempt another refresh if we just did one (prevent loops)
+    const now = Date.now();
+    if (now - lastTokenRefresh < 10000) { // 10 second minimum between refreshes
+      console.log("Skipping recovery - too soon since last refresh attempt");
+      return false;
+    }
+    
+    setLastTokenRefresh(now);
+    
+    // Diagnose the connection issue
+    const diagnosis = await diagnoseDatabaseConnection();
+    console.log("Connection diagnosis:", diagnosis);
+    
+    if (!diagnosis.success) {
+      if (diagnosis.authStatus === 'expired' || diagnosis.authStatus === 'invalid') {
+        console.log("Auth token issues detected, attempting refresh...");
+        const refreshed = await refreshSession();
+        if (refreshed) {
+          // Update our local session state to match the refreshed token
+          const { data: { session: newSession } } = await supabase.auth.getSession();
+          if (newSession) {
+            setSession(newSession);
+            setUser(newSession.user);
+            console.log("Session refreshed successfully during recovery");
+          }
+          return true;
+        }
+        console.warn("Token refresh failed during recovery attempt");
+      } else if (diagnosis.authStatus === 'missing') {
+        console.warn("No authentication session found during recovery");
+        
+        // Clear local state to force re-login
+        setUser(null);
+        setSession(null);
+        
+        // Show toast to user
+        toast({
+          title: "Authentication Required",
+          description: "Your session has expired. Please log in again.",
+          variant: "destructive",
+        });
+        
+        // Redirect to login
+        navigate('/login', { replace: true });
+        return false;
+      }
+    }
+    
+    return diagnosis.success;
+  };
+
+  // Refresh the session every 5 minutes to ensure the token stays valid
   useEffect(() => {
     if (!session) return;
     
     const refreshTimer = setInterval(async () => {
       console.log("Scheduled token refresh attempt");
       await refreshSession();
-    }, 10 * 60 * 1000); // 10 minutes
+    }, 5 * 60 * 1000); // 5 minutes
     
     return () => clearInterval(refreshTimer);
+  }, [session]);
+  
+  // Add periodic health check for database connection
+  useEffect(() => {
+    if (!session) return;
+    
+    const healthCheckTimer = setInterval(async () => {
+      console.log("Performing scheduled database health check");
+      const diagnosis = await diagnoseDatabaseConnection();
+      
+      if (!diagnosis.success) {
+        console.warn("Health check detected database connection issues:", diagnosis.message);
+        await tryDatabaseRecovery();
+      }
+    }, 10 * 60 * 1000); // 10 minutes
+    
+    return () => clearInterval(healthCheckTimer);
   }, [session]);
 
   useEffect(() => {
@@ -50,8 +123,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           
           console.log("User signed in:", newSession?.user?.email);
           
-          // Use setTimeout to avoid auth deadlocks
+          // Verify the database connection works with the new token
           setTimeout(async () => {
+            const connectionCheck = await diagnoseDatabaseConnection();
+            if (!connectionCheck.success) {
+              console.warn("Database connection check failed after sign-in:", connectionCheck.message);
+              toast({
+                title: "Connection Warning",
+                description: "Signed in, but there may be issues accessing your data",
+                variant: "warning",
+              });
+            }
+            
+            // Use setTimeout to avoid auth deadlocks
             if (newSession?.user?.id) {
               try {
                 const gym = await ensureGymExists(
@@ -73,7 +157,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           // Clear session data from localStorage on sign out
           if (typeof localStorage !== 'undefined') {
             try {
-              localStorage.removeItem('supabase.auth.token');
+              // Clear Supabase specific token
+              localStorage.removeItem(`sb-${SUPABASE_URL.split('//')[1]}-auth-token`);
               console.log("Removed session from localStorage during sign out");
             } catch (err) {
               console.warn("Error clearing localStorage during sign out:", err);
@@ -81,6 +166,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           }
         } else if (event === 'TOKEN_REFRESHED') {
           console.log("Auth token refreshed successfully");
+          setLastTokenRefresh(Date.now());
         }
       }
     );
@@ -104,8 +190,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             
             console.log("Existing session found for user:", existingSession.user.email);
             
-            // Don't block UI rendering on this
+            // Run an immediate database connectivity test
             setTimeout(async () => {
+              const connectionCheck = await diagnoseDatabaseConnection();
+              if (!connectionCheck.success) {
+                console.warn("Initial database connection check failed:", connectionCheck.message);
+                
+                // Only show a toast if there's a serious issue
+                if (connectionCheck.authStatus === 'expired' || connectionCheck.authStatus === 'invalid') {
+                  const recovered = await tryDatabaseRecovery();
+                  if (!recovered) {
+                    toast({
+                      title: "Connection Issue",
+                      description: "There might be issues accessing your data. Please try refreshing the page.",
+                      variant: "warning",
+                    });
+                  }
+                }
+              }
+              
+              // Don't block UI rendering on this gym check
               if (existingSession.user.id) {
                 try {
                   await ensureGymExists(
@@ -140,7 +244,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       subscription.unsubscribe();
       console.log("Auth subscription unsubscribed");
     };
-  }, [toast]);
+  }, [toast, navigate]);
+
+  // Export database recovery method for components to use
+  const recoverDatabaseConnection = async () => {
+    return await tryDatabaseRecovery();
+  };
 
   const signUp = async (email: string, password: string, gymName: string = 'My Gym') => {
     try {
@@ -240,20 +349,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Update our state
         setSession(data.session);
         setUser(data.user);
+        setLastTokenRefresh(Date.now());
         
         // Log auth state for debugging
         await logAuthState();
         
-        // Ensure user has a gym
-        try {
-          if (data.user && data.user.id) {
-            await ensureGymExists(data.user.id, email);
+        // Test database connection after sign-in
+        setTimeout(async () => {
+          const dbTest = await diagnoseDatabaseConnection();
+          if (!dbTest.success) {
+            console.warn("Database connection test after login failed:", dbTest);
+            
+            // If there's a permissions issue, try to recover
+            if (dbTest.permissions === 'denied') {
+              await tryDatabaseRecovery();
+            }
           }
-        } catch (gymError) {
-          console.error('Error ensuring gym exists:', gymError);
-          // Don't fail the signin process if this fails
-        }
-
+          
+          // Ensure user has a gym
+          try {
+            if (data.user && data.user.id) {
+              await ensureGymExists(data.user.id, email);
+            }
+          } catch (gymError) {
+            console.error('Error ensuring gym exists:', gymError);
+            // Don't fail the signin process if this fails
+          }
+        }, 100);
+        
         toast({
           title: "Signed in successfully",
           description: "Welcome back!",
@@ -301,7 +424,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Manually clear session storage as a backup
       if (typeof localStorage !== 'undefined') {
         try {
-          localStorage.removeItem('supabase.auth.token');
+          // Clear Supabase specific token with correct format
+          localStorage.removeItem(`sb-${SUPABASE_URL.split('//')[1].split('.')[0]}-auth-token`);
           console.log("Removed session from localStorage during manual sign out");
         } catch (err) {
           console.warn("Error clearing localStorage during manual sign out:", err);
@@ -338,6 +462,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       signUp,
       signIn,
       signOut,
+      recoverDatabaseConnection, // Add recovery method to context
     }}>
       {children}
     </AuthContext.Provider>

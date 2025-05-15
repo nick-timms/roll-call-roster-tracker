@@ -1,5 +1,5 @@
 
-import { User, Session } from '@supabase/supabase-js';
+import { Session, User } from '@supabase/supabase-js';
 
 export interface AuthContextType {
   user: User | null;
@@ -8,6 +8,7 @@ export interface AuthContextType {
   signUp: (email: string, password: string, gymName?: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  recoverDatabaseConnection: () => Promise<boolean>; // Add recovery function
 }
 
 export interface GymDetails {

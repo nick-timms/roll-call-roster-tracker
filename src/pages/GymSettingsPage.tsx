@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Settings } from 'lucide-react';
+import { Settings, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/hooks/auth/use-auth';
 import { supabase } from '@/integrations/supabase/client';
 import { ensureGymExists } from '@/hooks/auth/gym-service';
@@ -13,10 +14,11 @@ import { GymDetails } from '@/hooks/auth/types';
 
 const GymSettingsPage: React.FC = () => {
   const { toast } = useToast();
-  const { user, session } = useAuth();
+  const { user, session, recoverDatabaseConnection } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
+  const [fetchError, setFetchError] = useState<Error | null>(null);
   const [gymDetails, setGymDetails] = useState<GymDetails>({
     id: '',
     name: 'My Gym',
@@ -44,6 +46,7 @@ const GymSettingsPage: React.FC = () => {
     
     try {
       setIsLoading(true);
+      setFetchError(null);
       setHasAttemptedFetch(true);
       
       // First try using the ensureGymExists function which handles retries internally
@@ -62,6 +65,8 @@ const GymSettingsPage: React.FC = () => {
         return;
       }
       
+      console.log("ensureGymExists didn't return data, trying direct query");
+      
       // Fallback to direct query if needed
       const { data: gyms, error } = await supabase
         .from('gyms')
@@ -71,6 +76,8 @@ const GymSettingsPage: React.FC = () => {
         
       if (error) {
         console.error('Error fetching gym details:', error);
+        setFetchError(new Error(`Failed to load gym settings: ${error.message}`));
+        
         toast({
           title: "Error",
           description: "Failed to load gym settings. Please try again.",
@@ -106,6 +113,7 @@ const GymSettingsPage: React.FC = () => {
           
         if (insertError) {
           console.error("Error creating gym:", insertError);
+          setFetchError(new Error(`Failed to create gym profile: ${insertError.message}`));
           toast({
             title: "Error",
             description: "Failed to create gym profile. Please try again.",
@@ -125,8 +133,9 @@ const GymSettingsPage: React.FC = () => {
           });
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch gym details:', error);
+      setFetchError(error);
       toast({
         title: "Connection Error",
         description: "Could not connect to the database. Try refreshing the page.",
@@ -138,9 +147,24 @@ const GymSettingsPage: React.FC = () => {
     }
   };
 
-  const handleRetry = () => {
+  const handleRetry = async () => {
     setIsRetrying(true);
-    fetchGymDetails();
+    
+    // First try to recover the database connection
+    const recovered = await recoverDatabaseConnection();
+    
+    if (recovered) {
+      console.log("Database connection recovered, fetching gym details");
+      await fetchGymDetails();
+    } else {
+      console.warn("Database connection could not be recovered");
+      toast({
+        title: "Connection Error",
+        description: "Could not restore connection. Try signing out and back in.",
+        variant: "destructive"
+      });
+      setIsRetrying(false);
+    }
   };
 
   const handleSaveChanges = async () => {
@@ -221,6 +245,10 @@ const GymSettingsPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Error updating gym settings:', error);
+      
+      // Try to recover the database connection
+      await recoverDatabaseConnection();
+      
       toast({
         title: "Error",
         description: `Failed to save settings: ${error.message || "Unknown error"}`,
@@ -241,21 +269,65 @@ const GymSettingsPage: React.FC = () => {
     );
   }
   
+  // Loading state with skeletons
+  if (isLoading && !hasAttemptedFetch) {
+    return (
+      <div className="space-y-6 pb-16">
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+          <Skeleton className="h-8 w-40" />
+        </div>
+        
+        <Card className="border-zinc-200 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-5 w-5 rounded-full" />
+              <Skeleton className="h-6 w-48" />
+            </div>
+            <Skeleton className="h-4 w-64 mt-1" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+          <CardFooter className="flex justify-end">
+            <Skeleton className="h-10 w-32" />
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+  
   return (
     <div className="space-y-6 pb-16">
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
         <h1 className="text-2xl font-bold text-zinc-900">Gym Settings</h1>
         
-        {hasAttemptedFetch && !gymDetails.id && !isLoading && (
+        {(fetchError || (hasAttemptedFetch && !gymDetails.id)) && !isLoading && (
           <Button 
             onClick={handleRetry} 
             variant="outline"
             disabled={isRetrying}
           >
-            {isRetrying ? "Retrying..." : "Retry Connection"}
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`} />
+            {isRetrying ? "Reconnecting..." : "Retry Connection"}
           </Button>
         )}
       </div>
+      
+      {fetchError && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+          <h3 className="text-red-800 font-medium">Connection Error</h3>
+          <p className="text-red-700 text-sm mt-1">
+            {fetchError.message || "Failed to load gym settings. Please check your connection."}
+          </p>
+        </div>
+      )}
       
       <Card className="border-zinc-200 shadow-sm">
         <CardHeader>
@@ -335,7 +407,7 @@ const GymSettingsPage: React.FC = () => {
           <Button 
             onClick={handleSaveChanges} 
             className="bg-primary hover:bg-primary/90"
-            disabled={isLoading}
+            disabled={isLoading || !gymDetails.name.trim() || isRetrying}
           >
             {isLoading ? "Saving..." : "Save Changes"}
           </Button>
