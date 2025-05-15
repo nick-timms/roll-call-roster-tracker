@@ -62,13 +62,16 @@ export class SessionService {
           session,
         };
       } else {
-        // If refreshSession returns an object with data and error properties
-        if (refreshResult.error) {
-          console.error("SessionService: Error refreshing session:", refreshResult.error);
+        // We need to properly type check the object to ensure it has the expected properties
+        // Use a type guard to check if the result has the expected structure
+        const resultWithData = refreshResult as { data?: { session?: Session | null }, error?: any };
+        
+        if (resultWithData.error) {
+          console.error("SessionService: Error refreshing session:", resultWithData.error);
           return { success: false, session: null };
         }
         
-        const session = refreshResult.data?.session;
+        const session = resultWithData.data?.session;
         console.log(`SessionService: Session refresh successful: ${!!session}`);
         
         // Log updated token expiry
