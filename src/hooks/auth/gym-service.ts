@@ -1,5 +1,5 @@
 
-import { supabase, hasValidSession, logAuthState } from "@/integrations/supabase/client";
+import { supabase, hasValidSession, logAuthState, refreshSession } from "@/integrations/supabase/client";
 import { GymDetails } from "./types";
 
 // Maximum retry counts for database operations
@@ -21,7 +21,15 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
   const isAuthenticated = await hasValidSession();
   if (!isAuthenticated) {
     console.error("Error creating gym: No valid session");
-    return null;
+    
+    // Try to refresh the session and try again
+    const refreshed = await refreshSession();
+    if (!refreshed) {
+      console.error("Failed to refresh session, cannot create gym");
+      return null;
+    }
+    
+    console.log("Session refreshed, retrying gym creation");
   }
   
   // Check if a gym already exists for this email
@@ -57,23 +65,37 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
       // Re-verify auth session before insert
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        console.error("No valid session before inserting gym");
-        return null;
+        console.log("No valid session before inserting gym, trying to refresh");
+        const refreshed = await refreshSession();
+        if (!refreshed) {
+          console.error("Cannot refresh session, aborting gym creation");
+          return null;
+        }
       }
       
-      console.log("Session authenticated:", !!session.access_token);
+      console.log("Session authenticated:", !!session?.access_token);
       
+      // Use upsert to avoid race conditions
       const { data: newGym, error: insertError } = await supabase
         .from('gyms')
-        .insert({
+        .upsert({
           email: email,
           name: gymName
+        }, {
+          onConflict: 'email',
+          ignoreDuplicates: false
         })
         .select('id, name, phone, company_name, address, email')
         .single();
       
       if (insertError) {
         console.error(`Attempt ${retryCount + 1}: Error creating gym:`, insertError);
+        
+        // If permission denied, token might have expired
+        if (insertError.code === 'PGRST301' || insertError.message.includes('permission denied')) {
+          console.log("Permission denied, trying to refresh token");
+          await refreshSession();
+        }
         
         // If error is due to unique constraint, try to fetch the gym
         if (insertError.code === '23505') {
@@ -137,7 +159,13 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
   const isAuthenticated = await hasValidSession();
   if (!isAuthenticated) {
     console.error("Error ensuring gym exists: No valid session");
-    return null;
+    
+    // Try to refresh the session
+    const refreshed = await refreshSession();
+    if (!refreshed) {
+      console.error("Failed to refresh session, cannot ensure gym exists");
+      return null;
+    }
   }
   
   // Check for existing gym (simplified retry logic)
@@ -152,7 +180,31 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
     
     if (error) {
       console.error("Error checking for existing gym:", error);
-      return null;
+      
+      // If permission denied, token might have expired
+      if (error.code === 'PGRST301' || error.message.includes('permission denied')) {
+        console.log("Permission denied, trying to refresh token");
+        await refreshSession();
+        
+        // Retry after token refresh
+        const { data: retryGym, error: retryError } = await supabase
+          .from('gyms')
+          .select('id, name, phone, company_name, address, email')
+          .eq('email', email)
+          .maybeSingle();
+          
+        if (retryError) {
+          console.error("Error checking for existing gym after token refresh:", retryError);
+          return null;
+        }
+        
+        if (retryGym) {
+          console.log("Found gym after token refresh:", retryGym);
+          return retryGym as GymDetails;
+        }
+      } else {
+        return null;
+      }
     }
     
     if (existingGym) {
@@ -182,38 +234,75 @@ export const getGymIdByEmail = async (email: string): Promise<string | null> => 
   const isAuthenticated = await hasValidSession();
   if (!isAuthenticated) {
     console.error("Error getting gym ID: No valid session");
-    return null;
-  }
-  
-  try {
-    console.log("Fetching gym ID for email:", email);
     
-    const { data, error } = await supabase
-      .from('gyms')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
-    
-    if (error) {
-      console.error("Error fetching gym ID:", error);
+    // Try to refresh the session
+    const refreshed = await refreshSession();
+    if (!refreshed) {
+      console.error("Failed to refresh session, cannot get gym ID");
       return null;
     }
-    
-    if (!data) {
-      console.log("No gym found for email:", email);
-      
-      // Try to create a gym if none exists
-      console.log("Attempting to create a default gym");
-      const newGym = await createDefaultGym(email);
-      return newGym?.id || null;
-    }
-    
-    console.log("Found gym ID:", data.id);
-    return data.id;
-  } catch (error) {
-    console.error("Exception in getGymIdByEmail:", error);
-    return null;
   }
+  
+  let retryCount = 0;
+  
+  while (retryCount < MAX_RETRIES) {
+    try {
+      console.log(`Attempt ${retryCount + 1}: Fetching gym ID for email:`, email);
+      
+      const { data, error } = await supabase
+        .from('gyms')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+      
+      if (error) {
+        console.error(`Attempt ${retryCount + 1}: Error fetching gym ID:`, error);
+        
+        // If permission denied, token might have expired
+        if (error.code === 'PGRST301' || error.message.includes('permission denied')) {
+          console.log("Permission denied, trying to refresh token");
+          await refreshSession();
+        }
+        
+        retryCount++;
+        if (retryCount >= MAX_RETRIES) {
+          console.error("Max retries reached. Failed to get gym ID.");
+          return null;
+        }
+        
+        // Wait before retrying with exponential backoff
+        const delay = BASE_DELAY * Math.pow(2, retryCount - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      if (!data) {
+        console.log(`Attempt ${retryCount + 1}: No gym found for email:`, email);
+        
+        // Try to create a gym if none exists
+        console.log("Attempting to create a default gym");
+        const newGym = await createDefaultGym(email);
+        return newGym?.id || null;
+      }
+      
+      console.log("Found gym ID:", data.id);
+      return data.id;
+    } catch (error) {
+      console.error(`Attempt ${retryCount + 1}: Exception in getGymIdByEmail:`, error);
+      retryCount++;
+      
+      if (retryCount >= MAX_RETRIES) {
+        console.error("Max retries reached. Failed to get gym ID.");
+        return null;
+      }
+      
+      // Wait before retrying with exponential backoff
+      const delay = BASE_DELAY * Math.pow(2, retryCount - 1);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  return null;
 };
 
 /**
@@ -238,6 +327,28 @@ export const testDatabaseAccess = async (): Promise<boolean> => {
       
     if (error) {
       console.error("Database access test failed:", error);
+      
+      // If permission denied, token might have expired
+      if (error.code === 'PGRST301' || error.message.includes('permission denied')) {
+        console.log("Permission denied, trying to refresh token");
+        await refreshSession();
+        
+        // Retry after token refresh
+        console.log("Retrying database access test after token refresh");
+        const { data: retryData, error: retryError } = await supabase
+          .from('gyms')
+          .select('count(*)')
+          .limit(1);
+          
+        if (retryError) {
+          console.error("Database access test failed after token refresh:", retryError);
+          return false;
+        }
+        
+        console.log("Database access successful after token refresh:", retryData);
+        return true;
+      }
+      
       return false;
     }
     

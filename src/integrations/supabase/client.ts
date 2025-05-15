@@ -24,7 +24,9 @@ export const supabase = createClient<Database>(
       headers: {
         'X-Client-Info': 'lovable-app',
       },
-    }
+    },
+    // Add debug mode to help identify issues
+    debug: true
   }
 );
 
@@ -54,6 +56,13 @@ export const hasValidSession = async (): Promise<boolean> => {
         expires_at: expiresAt,
         current_time: new Date().toISOString()
       });
+      
+      // Check token validity window - if about to expire, trigger refresh
+      const now = Math.floor(Date.now() / 1000);
+      if (data.session.expires_at && (data.session.expires_at - now < 300)) { // Less than 5 minutes remaining
+        console.log("Token expiring soon, refreshing...");
+        await refreshSession();
+      }
     }
     
     return isValid;
@@ -88,8 +97,18 @@ export const logAuthState = async () => {
       // Check token in localStorage
       if (typeof localStorage !== 'undefined') {
         try {
-          const localSession = localStorage.getItem('supabase.auth.token');
+          const localSession = localStorage.getItem('sb-ktwcyzsxzivlibsaschj-auth-token'); // Use actual project ref
           console.log("LocalStorage session exists:", !!localSession);
+          
+          if (localSession) {
+            try {
+              const parsed = JSON.parse(localSession);
+              console.log("LocalStorage token expiry:", parsed?.expires_at ? 
+                new Date(parsed.expires_at * 1000).toISOString() : 'unknown');
+            } catch (parseError) {
+              console.warn("Could not parse localStorage session:", parseError);
+            }
+          }
         } catch (e) {
           console.warn("Error checking localStorage:", e);
         }
@@ -133,9 +152,35 @@ export const refreshSession = async () => {
     }
     
     console.log("Session refresh successful:", !!data.session);
+    
+    // Log updated token expiry
+    if (data.session?.expires_at) {
+      const expiresAt = new Date(data.session.expires_at * 1000).toISOString();
+      console.log("New token expires at:", expiresAt);
+    }
+    
     return !!data.session;
   } catch (e) {
     console.error("Exception refreshing session:", e);
+    return false;
+  }
+};
+
+// Test database connectivity
+export const testDatabaseConnection = async () => {
+  try {
+    console.log("Testing database connection...");
+    const { data, error } = await supabase.from('gyms').select('count').limit(1);
+    
+    if (error) {
+      console.error("Database connection test failed:", error);
+      return false;
+    }
+    
+    console.log("Database connection successful:", data);
+    return true;
+  } catch (e) {
+    console.error("Exception testing database connection:", e);
     return false;
   }
 };

@@ -14,12 +14,18 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { generateQRCode } from '@/lib/utils';
-import { Users, UserPlus, Search, QrCode, AlertTriangle } from 'lucide-react';
+import { Users, UserPlus, Search, QrCode, AlertTriangle, RefreshCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase, hasValidSession, logAuthState } from '@/integrations/supabase/client';
+import { 
+  supabase, 
+  hasValidSession, 
+  logAuthState, 
+  refreshSession,
+  testDatabaseConnection 
+} from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/auth/use-auth';
-import { getGymIdByEmail, testDatabaseAccess } from '@/hooks/auth/gym-service';
+import { getGymIdByEmail, testDatabaseAccess, ensureGymExists } from '@/hooks/auth/gym-service';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +48,7 @@ const MembersPage: React.FC = () => {
   const [gymId, setGymId] = useState<string | null>(null);
   const [authStatus, setAuthStatus] = useState<string>("checking");
   const [dbAccessStatus, setDbAccessStatus] = useState<string>("unknown");
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const navigate = useNavigate();
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
@@ -62,8 +69,22 @@ const MembersPage: React.FC = () => {
         
         if (isValid) {
           await logAuthState();
+          
+          // Test general database access
           const dbAccessOk = await testDatabaseAccess();
           setDbAccessStatus(dbAccessOk ? "access_ok" : "access_denied");
+          
+          // Test connection specifically 
+          await testDatabaseConnection();
+        } else {
+          console.log("No valid session found, attempting to refresh");
+          const refreshed = await refreshSession();
+          setAuthStatus(refreshed ? "refreshed" : "not_authenticated");
+          
+          if (refreshed) {
+            const dbAccessOk = await testDatabaseAccess();
+            setDbAccessStatus(dbAccessOk ? "access_ok" : "access_denied");
+          }
         }
       } catch (err) {
         console.error("Error checking auth status:", err);
@@ -86,16 +107,77 @@ const MembersPage: React.FC = () => {
         console.log("Fetching gym ID for user:", user.email);
         const id = await getGymIdByEmail(user.email);
         console.log("Fetched gym ID:", id);
-        setGymId(id);
+        
+        if (id) {
+          setGymId(id);
+        } else {
+          // If no gym ID is found, try to create one
+          console.log("No gym ID found, creating one");
+          const newGym = await ensureGymExists(user.email);
+          if (newGym?.id) {
+            console.log("Created new gym with ID:", newGym.id);
+            setGymId(newGym.id);
+          } else {
+            console.error("Failed to create gym");
+            toast({
+              title: "Error",
+              description: "Could not create or find your gym profile",
+              variant: "destructive"
+            });
+          }
+        }
       } catch (err) {
         console.error("Error fetching gym ID:", err);
+        toast({
+          title: "Error",
+          description: "Could not fetch gym information",
+          variant: "destructive"
+        });
       }
     };
     
     fetchGymId();
-  }, [user?.email]);
+  }, [user?.email, toast]);
 
-  // Fetch members using react-query
+  // Handler to manually refresh authentication
+  const handleRefreshAuth = async () => {
+    setIsRefreshing(true);
+    try {
+      // Refresh session token
+      const refreshed = await refreshSession();
+      
+      if (refreshed) {
+        toast({
+          title: "Success",
+          description: "Authentication refreshed successfully",
+        });
+        
+        // Test database access after refresh
+        const dbAccessOk = await testDatabaseAccess();
+        setDbAccessStatus(dbAccessOk ? "access_ok" : "access_denied");
+        
+        // Refetch members data
+        queryClient.invalidateQueries({ queryKey: ['members'] });
+      } else {
+        toast({
+          title: "Error",
+          description: "Could not refresh authentication",
+          variant: "destructive"
+        });
+      }
+    } catch (err) {
+      console.error("Error refreshing authentication:", err);
+      toast({
+        title: "Error",
+        description: "An error occurred while refreshing authentication",
+        variant: "destructive"
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Fetch members using react-query with improved error handling
   const { data: members, isLoading, isError, error } = useQuery({
     queryKey: ['members', gymId],
     queryFn: async () => {
@@ -109,8 +191,12 @@ const MembersPage: React.FC = () => {
       // Verify authentication status
       const isAuthenticated = await hasValidSession();
       if (!isAuthenticated) {
-        console.error("No valid session for fetching members");
-        throw new Error("Authentication required to fetch members");
+        console.error("No valid session for fetching members, trying to refresh");
+        const refreshed = await refreshSession();
+        if (!refreshed) {
+          console.error("Authentication required to fetch members");
+          throw new Error("Authentication required to fetch members");
+        }
       }
       
       try {
@@ -125,7 +211,32 @@ const MembersPage: React.FC = () => {
 
         if (error) {
           console.error("Error fetching members:", error);
-          throw new Error(error.message);
+          
+          // If permission denied, try refreshing token
+          if (error.code === 'PGRST301' || error.message.includes('permission denied')) {
+            console.log("Permission denied, trying to refresh token");
+            const refreshed = await refreshSession();
+            
+            if (refreshed) {
+              console.log("Token refreshed, retrying fetch");
+              const { data: retryData, error: retryError } = await supabase
+                .from('members')
+                .select('*')
+                .eq('gym_id', gymId);
+                
+              if (retryError) {
+                console.error("Error fetching members after token refresh:", retryError);
+                throw new Error(retryError.message);
+              }
+              
+              console.log(`Successfully fetched ${retryData?.length || 0} members after token refresh`);
+              return retryData || [];
+            } else {
+              throw new Error("Could not refresh authentication token");
+            }
+          } else {
+            throw new Error(error.message);
+          }
         }
         
         console.log(`Successfully fetched ${data?.length || 0} members`);
@@ -135,7 +246,7 @@ const MembersPage: React.FC = () => {
         throw fetchError;
       }
     },
-    enabled: !!gymId && authStatus === "authenticated",
+    enabled: !!gymId && authStatus === "authenticated" || authStatus === "refreshed",
     retry: 2,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
@@ -156,7 +267,11 @@ const MembersPage: React.FC = () => {
       // Verify authentication status
       const isAuthenticated = await hasValidSession();
       if (!isAuthenticated) {
-        throw new Error("Authentication required to add members");
+        console.log("No valid session for adding member, trying to refresh");
+        const refreshed = await refreshSession();
+        if (!refreshed) {
+          throw new Error("Authentication required to add members");
+        }
       }
       
       console.log("Adding member with name:", newMemberName, "to gym ID:", gymId);
@@ -180,8 +295,8 @@ const MembersPage: React.FC = () => {
       // Create new member object
       const newMember = {
         first_name: newMemberName,
-        last_name: '',
-        email: '',
+        last_name: '', // Required field
+        email: '', // Required field
         gym_id: gymId,
         qr_code: qrCodeDataUrl || ''
       };
@@ -191,30 +306,59 @@ const MembersPage: React.FC = () => {
         gym_id: newMember.gym_id
       });
       
-      // Insert member into database
-      const { data, error } = await supabase
-        .from('members')
-        .insert([newMember])
-        .select();
+      try {
+        // Insert member into database
+        const { data, error } = await supabase
+          .from('members')
+          .insert([newMember])
+          .select();
 
-      if (error) {
-        // Log detailed error information
-        console.error("Error adding member:", {
-          error_message: error.message,
-          error_details: error.details,
-          error_hint: error.hint,
-          error_code: error.code
-        });
+        if (error) {
+          // Log detailed error information
+          console.error("Error adding member:", {
+            error_message: error.message,
+            error_details: error.details,
+            error_hint: error.hint,
+            error_code: error.code
+          });
+          
+          // Create detailed error message
+          const errorMsg = `Error: ${error.message}\nCode: ${error.code}\nHint: ${error.hint || 'None'}\nDetails: ${error.details || 'None'}`;
+          setErrorDetails(errorMsg);
+          
+          // If permission denied, try refreshing token
+          if (error.code === 'PGRST301' || error.message.includes('permission denied')) {
+            console.log("Permission denied, trying to refresh token");
+            const refreshed = await refreshSession();
+            
+            if (refreshed) {
+              console.log("Token refreshed, retrying member creation");
+              const { data: retryData, error: retryError } = await supabase
+                .from('members')
+                .insert([newMember])
+                .select();
+                
+              if (retryError) {
+                console.error("Error adding member after token refresh:", retryError);
+                throw new Error(retryError.message);
+              }
+              
+              console.log("Member added successfully after token refresh:", retryData);
+              return retryData;
+            } else {
+              throw new Error("Could not refresh authentication token");
+            }
+          } else {
+            throw new Error(error.message);
+          }
+        }
         
-        // Create detailed error message
-        const errorMsg = `Error: ${error.message}\nCode: ${error.code}\nHint: ${error.hint || 'None'}\nDetails: ${error.details || 'None'}`;
-        setErrorDetails(errorMsg);
-        
-        throw new Error(error.message);
+        console.log("Member added successfully:", data);
+        return data;
+      } catch (error: any) {
+        console.error("Exception in member creation:", error);
+        throw error;
       }
-      
-      console.log("Member added successfully:", data);
-      return data;
     },
     onSuccess: () => {
       // Invalidate and refetch members
@@ -300,9 +444,24 @@ const MembersPage: React.FC = () => {
         <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
         <h2 className="text-xl font-bold mb-2">Authentication Required</h2>
         <p className="mb-4 text-center">You need to be logged in to access this page.</p>
-        <Button onClick={() => navigate('/login')}>
-          Go to Login
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button onClick={() => navigate('/login')}>
+            Go to Login
+          </Button>
+          <Button variant="outline" onClick={handleRefreshAuth} disabled={isRefreshing}>
+            {isRefreshing ? (
+              <>
+                <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                Refresh Authentication
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -332,12 +491,25 @@ const MembersPage: React.FC = () => {
         <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
         <h2 className="text-xl font-bold mb-2">Database Access Issue</h2>
         <p className="mb-4 text-center">Unable to access the database. This may be due to permissions issues.</p>
-        <div className="flex space-x-4">
+        <div className="flex flex-col sm:flex-row gap-3">
           <Button onClick={() => navigate('/dashboard')}>
             Return to Dashboard
           </Button>
-          <Button variant="outline" onClick={() => window.location.reload()}>
-            Retry
+          <Button variant="outline" onClick={handleRefreshAuth} disabled={isRefreshing}>
+            {isRefreshing ? (
+              <>
+                <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                Refresh Authentication
+              </>
+            )}
+          </Button>
+          <Button variant="secondary" onClick={() => window.location.reload()}>
+            Reload Page
           </Button>
         </div>
       </div>
@@ -350,9 +522,24 @@ const MembersPage: React.FC = () => {
       <div className="p-6">
         <h2 className="text-xl font-bold text-red-500 mb-2">Error fetching members</h2>
         <p className="mb-4">{error instanceof Error ? error.message : "Unknown error occurred"}</p>
-        <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['members', gymId] })}>
-          Try Again
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['members', gymId] })}>
+            Try Again
+          </Button>
+          <Button variant="outline" onClick={handleRefreshAuth} disabled={isRefreshing}>
+            {isRefreshing ? (
+              <>
+                <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                Refresh Authentication
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     );
   }
