@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { useAuth } from '@/hooks/auth/hooks/useAuth';
+import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
