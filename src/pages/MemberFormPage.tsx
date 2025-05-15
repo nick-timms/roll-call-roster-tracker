@@ -66,17 +66,23 @@ const MemberFormPage: React.FC = () => {
           throw new Error('No gym found for this account');
         }
         
-        // Create member object
+        // Create member object with required fields
         const memberData = {
-          ...values,
+          first_name: values.first_name,
+          last_name: values.last_name,
+          email: values.email || '', // Ensure email is not undefined
           gym_id: gymId,
+          phone: values.phone || null,
+          belt: values.belt || null,
+          membership_type: values.membership_type || null,
+          notes: values.notes || null,
           qr_code: '', // We'll generate this later if needed
         };
         
-        // Insert into database
+        // Insert into database - ensure we're passing a single object, not an array
         const { data, error } = await supabase
           .from('members')
-          .insert([memberData])
+          .insert(memberData)
           .select();
           
         if (error) {
