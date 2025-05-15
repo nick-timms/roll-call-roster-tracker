@@ -286,7 +286,7 @@ export const diagnoseDatabaseConnection = async (): Promise<{
     console.error("Diagnostics: Unexpected error during diagnosis:", e);
     return {
       success: false,
-      authStatus: 'unknown',
+      authStatus: 'invalid', // Changed from "unknown" to "invalid"
       networkStatus: 'disconnected',
       permissions: 'unknown',
       message: `Unexpected error: ${e.message || 'Unknown error'}`

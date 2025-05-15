@@ -131,7 +131,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               toast({
                 title: "Connection Warning",
                 description: "Signed in, but there may be issues accessing your data",
-                variant: "warning",
+                variant: "destructive",
               });
             }
             
@@ -157,8 +157,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           // Clear session data from localStorage on sign out
           if (typeof localStorage !== 'undefined') {
             try {
+              // Get the Supabase URL from client.ts
+              const projectRef = supabase.supabaseUrl.split('//')[1].split('.')[0];
               // Clear Supabase specific token
-              localStorage.removeItem(`sb-${SUPABASE_URL.split('//')[1]}-auth-token`);
+              localStorage.removeItem(`sb-${projectRef}-auth-token`);
               console.log("Removed session from localStorage during sign out");
             } catch (err) {
               console.warn("Error clearing localStorage during sign out:", err);
@@ -203,7 +205,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     toast({
                       title: "Connection Issue",
                       description: "There might be issues accessing your data. Please try refreshing the page.",
-                      variant: "warning",
+                      variant: "destructive",
                     });
                   }
                 }
@@ -424,8 +426,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Manually clear session storage as a backup
       if (typeof localStorage !== 'undefined') {
         try {
-          // Clear Supabase specific token with correct format
-          localStorage.removeItem(`sb-${SUPABASE_URL.split('//')[1].split('.')[0]}-auth-token`);
+          // Get the project ref from the Supabase URL
+          const projectRef = supabase.supabaseUrl.split('//')[1].split('.')[0];
+          localStorage.removeItem(`sb-${projectRef}-auth-token`);
           console.log("Removed session from localStorage during manual sign out");
         } catch (err) {
           console.warn("Error clearing localStorage during manual sign out:", err);
