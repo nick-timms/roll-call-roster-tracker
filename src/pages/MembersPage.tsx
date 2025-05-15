@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -613,7 +612,7 @@ const MembersPage: React.FC = () => {
             />
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
           </div>
-          <Button onClick={handleOpenDialog}>
+          <Button onClick={() => navigate('/members/new')}>
             <UserPlus className="mr-2 h-4 w-4" />
             Add Member
           </Button>
@@ -640,7 +639,7 @@ const MembersPage: React.FC = () => {
           <h3 className="mt-2 text-sm font-semibold text-gray-900">No members</h3>
           <p className="mt-1 text-sm text-gray-500">Get started by adding a new member.</p>
           <div className="mt-6">
-            <Button onClick={handleOpenDialog}>
+            <Button onClick={() => navigate('/members/new')}>
               <UserPlus className="mr-2 h-4 w-4" />
               Add Member
             </Button>

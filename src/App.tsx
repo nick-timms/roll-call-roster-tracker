@@ -14,6 +14,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import MembersPage from "./pages/MembersPage";
 import MemberDetailPage from "./pages/MemberDetailPage";
+import MemberFormPage from "./pages/MemberFormPage";
 import ScanPage from "./pages/ScanPage";
 import AccountPage from "./pages/AccountPage";
 import GymSettingsPage from "./pages/GymSettingsPage";
@@ -56,6 +57,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <MembersPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/members/new"
+                  element={
+                    <ProtectedRoute>
+                      <MemberFormPage />
                     </ProtectedRoute>
                   }
                 />

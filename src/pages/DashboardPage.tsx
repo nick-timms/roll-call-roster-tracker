@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -48,7 +47,7 @@ const DashboardPage: React.FC = () => {
     const data: { date: string; count: number }[] = [];
     const today = new Date();
     
-    for (let i = 364; i >= 0; i--) {
+    for (let i = 364; i >= 0; i++) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       const dateStr = formatDate(date);
