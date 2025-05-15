@@ -1,16 +1,17 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/auth/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 
+// Form validation schema
 const signupSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
@@ -24,11 +25,29 @@ const signupSchema = z.object({
 type SignupFormValues = z.infer<typeof signupSchema>;
 
 const SignupPage = () => {
-  const { signUp } = useAuth();
+  const { signUp, user, error: authError, clearError } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
   const navigate = useNavigate();
 
+  // Effect to redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      setRedirecting(true);
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
+  
+  // Effect to display auth context errors
+  useEffect(() => {
+    if (authError) {
+      setError(authError.message);
+      clearError();
+    }
+  }, [authError, clearError]);
+
+  // Initialize form
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
@@ -39,6 +58,7 @@ const SignupPage = () => {
     },
   });
 
+  // Form submission handler
   const onSubmit = async (data: SignupFormValues) => {
     setIsLoading(true);
     setError(null);
@@ -53,6 +73,16 @@ const SignupPage = () => {
       setIsLoading(false);
     }
   };
+  
+  // Don't render the form if already logged in and redirecting
+  if (redirecting) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <span className="ml-3 text-gray-600">Redirecting to dashboard...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12">
@@ -67,6 +97,7 @@ const SignupPage = () => {
 
         {error && (
           <Alert variant="destructive" className="mt-4">
+            <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}

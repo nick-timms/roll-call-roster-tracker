@@ -1,11 +1,12 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/auth/hooks/useAuth';
+import { AuthStatus } from '@/hooks/auth/types';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, isLoading, session } = useAuth();
+  const { user, session, isLoading } = useAuth();
   const [hasRedirected, setHasRedirected] = useState(false);
   
   useEffect(() => {

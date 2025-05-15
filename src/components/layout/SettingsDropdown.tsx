@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { useAuth } from '@/hooks/auth/use-auth';
+import { useAuth } from '@/hooks/auth/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -20,7 +20,6 @@ interface SettingsDropdownProps {
 
 const SettingsDropdown = ({ gymName }: SettingsDropdownProps) => {
   const { user, signOut } = useAuth();
-  const { toast } = useToast();
   const navigate = useNavigate();
 
   // Get initials for avatar
@@ -35,11 +34,9 @@ const SettingsDropdown = ({ gymName }: SettingsDropdownProps) => {
       
       // Call the signOut function from auth context
       await signOut();
-      
-      // Note: Navigation and toast are handled in the signOut function
+      // Navigation is handled in the signOut function
     } catch (error) {
       console.error('Error during logout:', error);
-      // Toast is already handled in the signOut function
     }
   };
 
