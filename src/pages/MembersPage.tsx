@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { generateQRCode } from '@/lib/utils';
 import { Users, UserPlus, Search, QrCode, AlertTriangle, RefreshCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -246,7 +248,7 @@ const MembersPage: React.FC = () => {
         throw fetchError;
       }
     },
-    enabled: !!gymId && authStatus === "authenticated" || authStatus === "refreshed",
+    enabled: !!gymId && (authStatus === "authenticated" || authStatus === "refreshed"),
     retry: 2,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
@@ -467,22 +469,32 @@ const MembersPage: React.FC = () => {
   }
 
   // Loading state when waiting for gym ID
-  if (!gymId && user?.id) {
+  if (!gymId && authStatus !== "no_user" && authStatus !== "not_authenticated") {
     return (
-      <div className="p-6 flex items-center justify-center h-64">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-        <span className="ml-3 text-gray-600">Loading gym data...</span>
+      <div className="p-6">
+        <div className="mb-6 flex items-center justify-between">
+          <Skeleton className="h-8 w-40" />
+          <div className="flex items-center space-x-2">
+            <Skeleton className="h-10 w-40" />
+            <Skeleton className="h-10 w-32" />
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Card key={i} className="bg-white shadow-md rounded-md">
+              <CardContent className="p-4">
+                <Skeleton className="h-6 w-24 mb-2" />
+                <div className="flex justify-between mt-4">
+                  <Skeleton className="h-9 w-24" />
+                  <Skeleton className="h-9 w-24" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     );
   }
-
-  // Display loading state for members
-  if (isLoading) return (
-    <div className="p-6 flex items-center justify-center h-64">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-      <span className="ml-3 text-gray-600">Loading members...</span>
-    </div>
-  );
 
   // Display database access issues
   if (dbAccessStatus === "access_denied") {
@@ -516,6 +528,48 @@ const MembersPage: React.FC = () => {
     );
   }
 
+  // Display loading state for members with skeletons
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Members</h1>
+          <div className="flex items-center space-x-2">
+            <div className="relative">
+              <Input
+                type="text"
+                placeholder="Search members..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pr-10"
+                disabled
+              />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            </div>
+            <Button onClick={handleOpenDialog} disabled>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Add Member
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Card key={i} className="bg-white shadow-md rounded-md">
+              <CardContent className="p-4">
+                <Skeleton className="h-6 w-24 mb-2" />
+                <div className="flex justify-between mt-4">
+                  <Skeleton className="h-9 w-24" />
+                  <Skeleton className="h-9 w-24" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
   if (isError) {
     console.error("Error details:", error);
     return (
@@ -654,7 +708,7 @@ const MembersPage: React.FC = () => {
             </Button>
             <Button 
               type="submit" 
-              onClick={() => handleAddMember()} 
+              onClick={handleAddMember} 
               disabled={addMemberMutation.isPending || newMemberName.trim() === ''}
             >
               {addMemberMutation.isPending ? "Adding..." : "Add Member"}
