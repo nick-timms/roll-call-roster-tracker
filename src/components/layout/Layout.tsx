@@ -2,40 +2,43 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/auth/use-auth';
+import { Sidebar } from '@/components/ui/sidebar';
+import { SettingsDropdown } from './SettingsDropdown';
+import { useMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/integrations/supabase/client';
-import SettingsDropdown from './SettingsDropdown';
-import { 
-  Users, 
-  QrCode, 
-  User,
-  LayoutDashboard,
-  Settings
-} from 'lucide-react';
+import { GymLogo } from '../GymLogo'; 
 
-const Layout: React.FC = () => {
+const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const [gymName, setGymName] = useState('My Gym');
-  const [isLoading, setIsLoading] = useState(false);
-  
+  const { user, signOut } = useAuth();
+  const isMobile = useMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
+  const [gymName, setGymName] = useState('');
+
   useEffect(() => {
-    const fetchGymDetails = async () => {
-      if (!user?.email) return;
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  }, [isMobile]);
+
+  useEffect(() => {
+    // Fetch the gym name if user is logged in
+    const fetchGymName = async () => {
+      if (!user) return;
       
       try {
-        setIsLoading(true);
+        console.log("Fetching gym name for user:", user.id);
+        
         const { data: gyms, error } = await supabase
           .from('gyms')
           .select('name')
-          .eq('email', user.email as any)
+          .eq('owner_id', user.id)
           .maybeSingle();
           
         if (error) {
-          console.error('Error fetching gym details:', error);
+          console.error("Error fetching gym name:", error);
           return;
         }
         
@@ -44,128 +47,127 @@ const Layout: React.FC = () => {
           console.log("Found gym name:", gyms.name);
           setGymName(gyms.name);
         } else {
-          console.log("No gym found or no name set, using default");
+          console.log("No gym name found");
         }
       } catch (error) {
-        console.error('Failed to fetch gym details:', error);
-      } finally {
-        setIsLoading(false);
+        console.error("Failed to fetch gym name:", error);
       }
     };
     
-    if (user?.email) {
-      fetchGymDetails();
-    }
+    fetchGymName();
   }, [user]);
 
-  const isActive = (path: string) => location.pathname === path;
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+  
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+  
+  const isActive = (path: string) => {
+    return location.pathname === path;
+  };
 
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-50">
-      {user && (
-        <header className="bg-white border-b border-zinc-200 shadow-sm sticky top-0 z-10">
-          <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <img 
-                src="/lovable-uploads/46cafb72-bfce-40a5-b4b9-8c670433468d.png" 
-                alt="MatTrack Logo" 
-                className="h-8"
-              />
-              <p className="text-xs text-zinc-500"></p>
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Sidebar */}
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)}>
+        <div className="flex flex-col h-full">
+          <div className="p-4 border-b">
+            <GymLogo gymName={gymName || "MatTrack"} />
+          </div>
+          
+          <div className="flex-1 py-4">
+            <nav className="space-y-1 px-2">
+              <Link 
+                to="/dashboard" 
+                className={`flex items-center px-4 py-2.5 text-sm font-medium rounded-md transition-colors ${isActive('/dashboard') ? 'bg-primary text-primary-foreground' : 'text-gray-700 hover:bg-gray-100'}`}
+              >
+                Dashboard
+              </Link>
+              
+              <Link 
+                to="/members" 
+                className={`flex items-center px-4 py-2.5 text-sm font-medium rounded-md transition-colors ${isActive('/members') ? 'bg-primary text-primary-foreground' : 'text-gray-700 hover:bg-gray-100'}`}
+              >
+                Members
+              </Link>
+              
+              <Link 
+                to="/scan" 
+                className={`flex items-center px-4 py-2.5 text-sm font-medium rounded-md transition-colors ${isActive('/scan') ? 'bg-primary text-primary-foreground' : 'text-gray-700 hover:bg-gray-100'}`}
+              >
+                Scan Attendance
+              </Link>
+              
+              <Link 
+                to="/settings" 
+                className={`flex items-center px-4 py-2.5 text-sm font-medium rounded-md transition-colors ${isActive('/settings') ? 'bg-primary text-primary-foreground' : 'text-gray-700 hover:bg-gray-100'}`}
+              >
+                Settings
+              </Link>
+            </nav>
+          </div>
+          
+          <div className="p-4 border-t">
+            <Button 
+              variant="outline" 
+              className="w-full justify-start text-gray-700"
+              onClick={handleSignOut}
+            >
+              Sign out
+            </Button>
+          </div>
+        </div>
+      </Sidebar>
+      
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+        {/* Top navbar */}
+        <header className="bg-white border-b border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between h-16 px-4">
+            <div className="flex items-center">
+              <button
+                onClick={toggleSidebar}
+                className="p-2 rounded-md text-gray-500 hover:text-gray-900 focus:outline-none"
+              >
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  className="h-6 w-6" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M4 6h16M4 12h16m-7 6h7" 
+                  />
+                </svg>
+              </button>
+              <div className="ml-4 md:hidden">
+                <GymLogo gymName={gymName || "MatTrack"} small />
+              </div>
             </div>
-            <div className="flex space-x-3 items-center">
-              <SettingsDropdown gymName={gymName} />
+            
+            <div className="flex items-center">
+              <SettingsDropdown onSignOut={handleSignOut} />
             </div>
           </div>
         </header>
-      )}
-      
-      <div className="flex flex-1">
-        {user && (
-          <aside className="hidden md:block w-56 bg-zinc-50 border-r border-zinc-200 p-4 sticky top-16 h-[calc(100vh-4rem)]">
-            <nav className="space-y-1.5">
-              <Link to="/dashboard">
-                <Button 
-                  variant={isActive('/dashboard') ? "default" : "ghost"} 
-                  className="w-full justify-start text-sm font-medium"
-                  size="sm"
-                >
-                  <LayoutDashboard className="mr-2 h-4 w-4" />
-                  Dashboard
-                </Button>
-              </Link>
-              <Link to="/members">
-                <Button 
-                  variant={isActive('/members') ? "default" : "ghost"} 
-                  className="w-full justify-start text-sm font-medium"
-                  size="sm"
-                >
-                  <Users className="mr-2 h-4 w-4" />
-                  Members
-                </Button>
-              </Link>
-              <Link to="/scan">
-                <Button 
-                  variant={isActive('/scan') ? "default" : "ghost"} 
-                  className="w-full justify-start text-sm font-medium"
-                  size="sm"
-                >
-                  <QrCode className="mr-2 h-4 w-4" />
-                  Scan QR Code
-                </Button>
-              </Link>
-              <Link to="/account">
-                <Button 
-                  variant={isActive('/account') ? "default" : "ghost"} 
-                  className="w-full justify-start text-sm font-medium"
-                  size="sm"
-                >
-                  <User className="mr-2 h-4 w-4" />
-                  Gym Account
-                </Button>
-              </Link>
-              <Link to="/settings">
-                <Button 
-                  variant={isActive('/settings') ? "default" : "ghost"} 
-                  className="w-full justify-start text-sm font-medium"
-                  size="sm"
-                >
-                  <Settings className="mr-2 h-4 w-4" />
-                  Gym Settings
-                </Button>
-              </Link>
-            </nav>
-          </aside>
-        )}
         
-        <main className="flex-1 p-4 md:p-6 max-w-full">
+        {/* Page content */}
+        <main className="flex-1 overflow-auto p-4 md:p-6">
           <Outlet />
         </main>
       </div>
-      
-      {/* Mobile Navigation */}
-      {user && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 p-1 shadow-md z-10">
-          <div className="flex justify-around">
-            <Link to="/dashboard" className="flex flex-col items-center p-2">
-              <LayoutDashboard className={`h-5 w-5 ${isActive('/dashboard') ? 'text-primary' : 'text-zinc-500'}`} />
-              <span className={`text-xs mt-1 ${isActive('/dashboard') ? 'text-primary font-medium' : 'text-zinc-500'}`}>Dashboard</span>
-            </Link>
-            <Link to="/members" className="flex flex-col items-center p-2">
-              <Users className={`h-5 w-5 ${isActive('/members') ? 'text-primary' : 'text-zinc-500'}`} />
-              <span className={`text-xs mt-1 ${isActive('/members') ? 'text-primary font-medium' : 'text-zinc-500'}`}>Members</span>
-            </Link>
-            <Link to="/scan" className="flex flex-col items-center p-2">
-              <QrCode className={`h-5 w-5 ${isActive('/scan') ? 'text-primary' : 'text-zinc-500'}`} />
-              <span className={`text-xs mt-1 ${isActive('/scan') ? 'text-primary font-medium' : 'text-zinc-500'}`}>Scan</span>
-            </Link>
-            <Link to="/settings" className="flex flex-col items-center p-2">
-              <Settings className={`h-5 w-5 ${isActive('/settings') ? 'text-primary' : 'text-zinc-500'}`} />
-              <span className={`text-xs mt-1 ${isActive('/settings') ? 'text-primary font-medium' : 'text-zinc-500'}`}>Settings</span>
-            </Link>
-          </div>
-        </nav>
-      )}
     </div>
   );
 };

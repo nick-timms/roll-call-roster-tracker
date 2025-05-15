@@ -27,13 +27,13 @@ const GymSettingsPage: React.FC = () => {
   });
   
   useEffect(() => {
-    if (user?.email && session) {
+    if (user?.id && session) {
       fetchGymDetails();
     }
   }, [user, session]);
 
   const fetchGymDetails = async () => {
-    if (!user?.email || !session) {
+    if (!user?.id || !session) {
       toast({
         title: "Authentication Required",
         description: "Please log in to access gym settings",
@@ -47,7 +47,7 @@ const GymSettingsPage: React.FC = () => {
       setHasAttemptedFetch(true);
       
       // First try using the ensureGymExists function which handles retries internally
-      const gymData = await ensureGymExists(user.email);
+      const gymData = await ensureGymExists(user.id, user.email || '');
       
       if (gymData) {
         console.log("Found gym details using ensureGymExists:", gymData);
@@ -57,7 +57,7 @@ const GymSettingsPage: React.FC = () => {
           phone: gymData.phone || '',
           company_name: gymData.company_name || '',
           address: gymData.address || '',
-          email: user.email
+          email: gymData.email || user.email || ''
         });
         return;
       }
@@ -66,7 +66,7 @@ const GymSettingsPage: React.FC = () => {
       const { data: gyms, error } = await supabase
         .from('gyms')
         .select('id, name, phone, company_name, address, email')
-        .eq('email', user.email as any)
+        .eq('owner_id', user.id)
         .maybeSingle();
         
       if (error) {
@@ -88,7 +88,7 @@ const GymSettingsPage: React.FC = () => {
           phone: gyms?.phone || '',
           company_name: gyms?.company_name || '',
           address: gyms?.address || '',
-          email: gyms?.email || user.email
+          email: gyms?.email || user.email || ''
         });
       } else {
         console.log("No gym found via direct query, creating new one");
@@ -97,7 +97,8 @@ const GymSettingsPage: React.FC = () => {
         const { data: newGym, error: insertError } = await supabase
           .from('gyms')
           .insert({ 
-            email: user.email as any,
+            owner_id: user.id,
+            email: user.email || '',
             name: 'My Gym' 
           })
           .select()
@@ -143,7 +144,7 @@ const GymSettingsPage: React.FC = () => {
   };
 
   const handleSaveChanges = async () => {
-    if (!user?.email || !session) {
+    if (!user?.id || !session) {
       toast({
         title: "Authentication Required",
         description: "You must be logged in to update settings",
@@ -188,7 +189,7 @@ const GymSettingsPage: React.FC = () => {
           description: "Gym settings updated successfully",
         });
       } else {
-        console.log("Creating new gym for email:", user.email);
+        console.log("Creating new gym for user ID:", user.id);
         
         const { data: newGym, error: insertError } = await supabase
           .from('gyms')
@@ -197,7 +198,8 @@ const GymSettingsPage: React.FC = () => {
             phone: gymDetails.phone,
             company_name: gymDetails.company_name,
             address: gymDetails.address,
-            email: user.email as any
+            email: user.email || '',
+            owner_id: user.id
           })
           .select()
           .single();

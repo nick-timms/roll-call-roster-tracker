@@ -9,13 +9,13 @@ const BASE_DELAY = 500; // Base delay in milliseconds for exponential backoff
 /**
  * Creates a default gym for a user with improved error handling
  */
-export const createDefaultGym = async (email: string, gymName: string = 'My Gym'): Promise<GymDetails | null> => {
-  if (!email) {
-    console.error("Cannot create gym: No email provided");
+export const createDefaultGym = async (userId: string, gymName: string = 'My Gym', email: string = ''): Promise<GymDetails | null> => {
+  if (!userId) {
+    console.error("Cannot create gym: No user ID provided");
     return null;
   }
   
-  console.log("Creating default gym for:", email);
+  console.log("Creating default gym for user ID:", userId);
   
   // Validate session before proceeding
   const isAuthenticated = await hasValidSession();
@@ -32,13 +32,13 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
     console.log("Session refreshed, retrying gym creation");
   }
   
-  // Check if a gym already exists for this email
+  // Check if a gym already exists for this user
   try {
-    console.log("Checking if gym already exists for email:", email);
+    console.log("Checking if gym already exists for user ID:", userId);
     const { data: existingGyms, error: checkError } = await supabase
       .from('gyms')
       .select('id, name, phone, company_name, address, email')
-      .eq('email', email as any)
+      .eq('owner_id', userId)
       .maybeSingle();
     
     if (checkError) {
@@ -60,7 +60,7 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
   
   while (retryCount < MAX_RETRIES) {
     try {
-      console.log(`Attempt ${retryCount + 1}: Creating new gym for email ${email}`);
+      console.log(`Attempt ${retryCount + 1}: Creating new gym for user ID ${userId}`);
       
       // Re-verify auth session before insert
       const { data: { session } } = await supabase.auth.getSession();
@@ -75,15 +75,13 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
       
       console.log("Session authenticated:", !!session?.access_token);
       
-      // Use upsert to avoid race conditions
+      // Insert new gym with owner_id
       const { data: newGym, error: insertError } = await supabase
         .from('gyms')
-        .upsert({
-          email: email as any,
+        .insert({
+          owner_id: userId,
+          email: email,
           name: gymName
-        }, {
-          onConflict: 'email',
-          ignoreDuplicates: false
         })
         .select('id, name, phone, company_name, address, email')
         .single();
@@ -95,21 +93,6 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
         if (insertError.code === 'PGRST301' || insertError.message.includes('permission denied')) {
           console.log("Permission denied, trying to refresh token");
           await refreshSession();
-        }
-        
-        // If error is due to unique constraint, try to fetch the gym
-        if (insertError.code === '23505') {
-          console.log("Gym may already exist due to unique constraint violation");
-          const { data: existingGym } = await supabase
-            .from('gyms')
-            .select('id, name, phone, company_name, address, email')
-            .eq('email', email as any)
-            .maybeSingle();
-            
-          if (existingGym) {
-            console.log("Found existing gym after insert error:", existingGym);
-            return existingGym as GymDetails;
-          }
         }
         
         retryCount++;
@@ -147,13 +130,13 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
 /**
  * Ensures a gym exists for a user, creating one if needed
  */
-export const ensureGymExists = async (email: string, gymName: string = 'My Gym'): Promise<GymDetails | null> => {
-  if (!email) {
-    console.error("Cannot ensure gym exists: No email provided");
+export const ensureGymExists = async (userId: string, email: string = '', gymName: string = 'My Gym'): Promise<GymDetails | null> => {
+  if (!userId) {
+    console.error("Cannot ensure gym exists: No user ID provided");
     return null;
   }
 
-  console.log("Ensuring gym exists for:", email);
+  console.log("Ensuring gym exists for user ID:", userId);
   
   // Validate session before proceeding
   const isAuthenticated = await hasValidSession();
@@ -170,12 +153,12 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
   
   // Check for existing gym (simplified retry logic)
   try {
-    console.log("Checking for existing gym for email:", email);
+    console.log("Checking for existing gym for user ID:", userId);
     
     const { data: existingGym, error } = await supabase
       .from('gyms')
       .select('id, name, phone, company_name, address, email')
-      .eq('email', email as any)
+      .eq('owner_id', userId)
       .maybeSingle();
     
     if (error) {
@@ -190,7 +173,7 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
         const { data: retryGym, error: retryError } = await supabase
           .from('gyms')
           .select('id, name, phone, company_name, address, email')
-          .eq('email', email as any)
+          .eq('owner_id', userId)
           .maybeSingle();
           
         if (retryError) {
@@ -214,7 +197,7 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
     
     // No gym found, create one
     console.log("No gym found, creating default gym");
-    return await createDefaultGym(email, gymName);
+    return await createDefaultGym(userId, gymName, email);
   } catch (error) {
     console.error("Exception in ensureGymExists:", error);
     return null;
@@ -222,11 +205,11 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
 };
 
 /**
- * Gets gym ID by email with simplified error handling
+ * Gets gym ID by user ID with simplified error handling
  */
-export const getGymIdByEmail = async (email: string): Promise<string | null> => {
-  if (!email) {
-    console.error("Cannot get gym ID: No email provided");
+export const getGymIdByUserId = async (userId: string): Promise<string | null> => {
+  if (!userId) {
+    console.error("Cannot get gym ID: No user ID provided");
     return null;
   }
   
@@ -247,12 +230,12 @@ export const getGymIdByEmail = async (email: string): Promise<string | null> => 
   
   while (retryCount < MAX_RETRIES) {
     try {
-      console.log(`Attempt ${retryCount + 1}: Fetching gym ID for email:`, email);
+      console.log(`Attempt ${retryCount + 1}: Fetching gym ID for user ID:`, userId);
       
       const { data, error } = await supabase
         .from('gyms')
         .select('id')
-        .eq('email', email as any)
+        .eq('owner_id', userId)
         .maybeSingle();
       
       if (error) {
@@ -277,18 +260,18 @@ export const getGymIdByEmail = async (email: string): Promise<string | null> => 
       }
       
       if (!data) {
-        console.log(`Attempt ${retryCount + 1}: No gym found for email:`, email);
+        console.log(`Attempt ${retryCount + 1}: No gym found for user ID:`, userId);
         
         // Try to create a gym if none exists
         console.log("Attempting to create a default gym");
-        const newGym = await createDefaultGym(email);
+        const newGym = await createDefaultGym(userId);
         return newGym?.id || null;
       }
       
       console.log("Found gym ID:", data.id);
       return data.id;
     } catch (error) {
-      console.error(`Attempt ${retryCount + 1}: Exception in getGymIdByEmail:`, error);
+      console.error(`Attempt ${retryCount + 1}: Exception in getGymIdByUserId:`, error);
       retryCount++;
       
       if (retryCount >= MAX_RETRIES) {

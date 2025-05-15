@@ -52,9 +52,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           
           // Use setTimeout to avoid auth deadlocks
           setTimeout(async () => {
-            if (newSession?.user?.email) {
+            if (newSession?.user?.id) {
               try {
-                const gym = await ensureGymExists(newSession.user.email);
+                const gym = await ensureGymExists(
+                  newSession.user.id, 
+                  newSession.user.email || ''
+                );
                 console.log("Gym check complete:", gym ? "Gym exists/created" : "No gym found");
               } catch (err) {
                 console.warn("Could not ensure gym exists:", err);
@@ -103,9 +106,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             
             // Don't block UI rendering on this
             setTimeout(async () => {
-              if (existingSession.user.email) {
+              if (existingSession.user.id) {
                 try {
-                  await ensureGymExists(existingSession.user.email);
+                  await ensureGymExists(
+                    existingSession.user.id,
+                    existingSession.user.email || ''
+                  );
                 } catch (err) {
                   console.warn("Could not ensure gym exists during initial session check:", err);
                 }
@@ -149,6 +155,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/dashboard`,
+          data: {
+            full_name: email.split('@')[0] // Default name from email
+          }
         }
       });
       
@@ -171,7 +180,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(data.user);
         
         try {
-          await createDefaultGym(email, gymName);
+          await createDefaultGym(data.user.id, gymName, email);
         } catch (gymError) {
           console.error("Gym creation failed:", gymError);
           toast({
@@ -237,7 +246,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         // Ensure user has a gym
         try {
-          await ensureGymExists(email);
+          if (data.user && data.user.id) {
+            await ensureGymExists(data.user.id, email);
+          }
         } catch (gymError) {
           console.error('Error ensuring gym exists:', gymError);
           // Don't fail the signin process if this fails
