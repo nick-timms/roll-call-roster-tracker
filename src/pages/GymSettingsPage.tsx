@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -65,7 +66,7 @@ const GymSettingsPage: React.FC = () => {
       const { data: gyms, error } = await supabase
         .from('gyms')
         .select('id, name, phone, company_name, address, email')
-        .eq('email', user.email)
+        .eq('email', user.email as any)
         .maybeSingle();
         
       if (error) {
@@ -78,15 +79,16 @@ const GymSettingsPage: React.FC = () => {
         return;
       }
       
-      if (gyms) {
+      // Type guard to make TypeScript happy
+      if (gyms && typeof gyms === 'object') {
         console.log("Found gym details:", gyms);
         setGymDetails({
-          id: gyms.id || '',
-          name: gyms.name || 'My Gym',
-          phone: gyms.phone || '',
-          company_name: gyms.company_name || '',
-          address: gyms.address || '',
-          email: gyms.email || user.email
+          id: gyms?.id || '',
+          name: gyms?.name || 'My Gym',
+          phone: gyms?.phone || '',
+          company_name: gyms?.company_name || '',
+          address: gyms?.address || '',
+          email: gyms?.email || user.email
         });
       } else {
         console.log("No gym found via direct query, creating new one");
@@ -95,7 +97,7 @@ const GymSettingsPage: React.FC = () => {
         const { data: newGym, error: insertError } = await supabase
           .from('gyms')
           .insert({ 
-            email: user.email,
+            email: user.email as any,
             name: 'My Gym' 
           })
           .select()
@@ -195,7 +197,7 @@ const GymSettingsPage: React.FC = () => {
             phone: gymDetails.phone,
             company_name: gymDetails.company_name,
             address: gymDetails.address,
-            email: user.email
+            email: user.email as any
           })
           .select()
           .single();

@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -30,7 +31,7 @@ const Layout: React.FC = () => {
         const { data: gyms, error } = await supabase
           .from('gyms')
           .select('name')
-          .eq('email', user.email)
+          .eq('email', user.email as any)
           .maybeSingle();
           
         if (error) {
@@ -38,7 +39,8 @@ const Layout: React.FC = () => {
           return;
         }
         
-        if (gyms && gyms.name) {
+        // Type guard to check if gyms is an object with a name property
+        if (gyms && typeof gyms === 'object' && 'name' in gyms && gyms.name) {
           console.log("Found gym name:", gyms.name);
           setGymName(gyms.name);
         } else {

@@ -25,8 +25,7 @@ export const supabase = createClient<Database>(
         'X-Client-Info': 'lovable-app',
       },
     },
-    // Add debug mode to help identify issues
-    debug: true
+    // Remove debug property as it's not in the type definition
   }
 );
 

@@ -38,7 +38,7 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
     const { data: existingGyms, error: checkError } = await supabase
       .from('gyms')
       .select('id, name, phone, company_name, address, email')
-      .eq('email', email)
+      .eq('email', email as any)
       .maybeSingle();
     
     if (checkError) {
@@ -79,7 +79,7 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
       const { data: newGym, error: insertError } = await supabase
         .from('gyms')
         .upsert({
-          email: email,
+          email: email as any,
           name: gymName
         }, {
           onConflict: 'email',
@@ -103,7 +103,7 @@ export const createDefaultGym = async (email: string, gymName: string = 'My Gym'
           const { data: existingGym } = await supabase
             .from('gyms')
             .select('id, name, phone, company_name, address, email')
-            .eq('email', email)
+            .eq('email', email as any)
             .maybeSingle();
             
           if (existingGym) {
@@ -175,7 +175,7 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
     const { data: existingGym, error } = await supabase
       .from('gyms')
       .select('id, name, phone, company_name, address, email')
-      .eq('email', email)
+      .eq('email', email as any)
       .maybeSingle();
     
     if (error) {
@@ -190,7 +190,7 @@ export const ensureGymExists = async (email: string, gymName: string = 'My Gym')
         const { data: retryGym, error: retryError } = await supabase
           .from('gyms')
           .select('id, name, phone, company_name, address, email')
-          .eq('email', email)
+          .eq('email', email as any)
           .maybeSingle();
           
         if (retryError) {
@@ -252,7 +252,7 @@ export const getGymIdByEmail = async (email: string): Promise<string | null> => 
       const { data, error } = await supabase
         .from('gyms')
         .select('id')
-        .eq('email', email)
+        .eq('email', email as any)
         .maybeSingle();
       
       if (error) {
