@@ -37,6 +37,9 @@ export interface AuthContextType extends AuthState {
   
   // Utility methods
   clearError: () => void;
+  
+  // Authentication status
+  status: AuthStatus;
 }
 
 // Gym details type
