@@ -6,26 +6,31 @@ import { AuthStatus } from '@/hooks/auth/types';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, session, isLoading, status } = useAuth();
+  const { user, session, isLoading } = useAuth();
   const [redirectAttempted, setRedirectAttempted] = useState(false);
   
   useEffect(() => {
+    console.log("Index page: Initial render", { 
+      hasUser: !!user, 
+      hasSession: !!session,
+      isLoading,
+      redirectAttempted
+    });
+    
     // Set a timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
       if (!redirectAttempted) {
-        console.log("Index page: Timeout reached, forcing navigation");
+        console.log("Index page: Timeout reached, forcing navigation to login");
         setRedirectAttempted(true);
         navigate('/login', { replace: true });
       }
     }, 3000); // 3 second timeout
     
-    // Only redirect once auth state is determined
+    // Only redirect once auth state is determined or after a reasonable timeout
     if (!isLoading && !redirectAttempted) {
-      console.log("Index page: Authentication status", { 
-        status, 
+      console.log("Index page: Auth state determined", { 
         hasUser: !!user, 
-        hasSession: !!session,
-        isLoading
+        hasSession: !!session
       });
       
       setRedirectAttempted(true); // Mark that we've attempted a redirect
@@ -40,7 +45,7 @@ const Index = () => {
     }
     
     return () => clearTimeout(timeoutId);
-  }, [user, session, navigate, isLoading, redirectAttempted, status]);
+  }, [user, session, navigate, isLoading, redirectAttempted]);
   
   // Return a loading indicator while auth state is being determined
   return (

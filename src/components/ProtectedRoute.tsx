@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SessionService } from "@/hooks/auth/services/SessionService";
 import { UserService } from "@/hooks/auth/services/UserService";
 import { useToast } from "@/hooks/use-toast";
+import { AuthStatus } from "@/hooks/auth/types";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -17,7 +18,7 @@ interface ProtectedRouteProps {
  * Prevents unauthorized access to protected pages
  */
 const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
-  const { user, session, isLoading, status, recoverDatabaseConnection } = useAuth();
+  const { user, session, isLoading, recoverDatabaseConnection } = useAuth();
   const { toast } = useToast();
   const location = useLocation();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -32,7 +33,6 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
         console.log("Protected route: Checking authentication", {
           userExists: !!user,
           sessionExists: !!session,
-          status,
           isLoading,
           path: location.pathname,
           requireAdmin
@@ -133,7 +133,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
     checkAuth();
     
     return () => clearTimeout(timeoutId);
-  }, [isLoading, user, session, recoverDatabaseConnection, location.pathname, requireAdmin, toast, status]);
+  }, [isLoading, user, session, recoverDatabaseConnection, location.pathname, requireAdmin, toast]);
   
   // Show loading state while checking auth
   if (isLoading || isCheckingAuth) {
