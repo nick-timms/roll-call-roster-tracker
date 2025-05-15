@@ -18,7 +18,7 @@ interface ProtectedRouteProps {
  * Prevents unauthorized access to protected pages
  */
 const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
-  const { user, session, isLoading, recoverDatabaseConnection } = useAuth();
+  const { user, session, isLoading, status, recoverDatabaseConnection } = useAuth();
   const { toast } = useToast();
   const location = useLocation();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -33,6 +33,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
         console.log("Protected route: Checking authentication", {
           userExists: !!user,
           sessionExists: !!session,
+          status,
           isLoading,
           path: location.pathname,
           requireAdmin
@@ -48,7 +49,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
           console.log("Protected route: No authenticated user or session found");
           
           // Try to double-check with Supabase directly
-          const { session: directSession } = await SessionService.getCurrentSession();
+          const { data: { session: directSession } } = await supabase.auth.getSession();
           
           if (!directSession?.user) {
             console.log("Protected route: No authenticated user found, redirecting to login");
@@ -122,7 +123,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
     };
     
     checkAuth();
-  }, [isLoading, user, session, recoverDatabaseConnection, location.pathname, requireAdmin, toast]);
+  }, [isLoading, user, session, recoverDatabaseConnection, location.pathname, requireAdmin, toast, status]);
   
   // Show loading state while checking auth
   if (isLoading || isCheckingAuth) {

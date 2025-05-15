@@ -1,5 +1,5 @@
 
-// Re-export the hook from auth-context.tsx
+// Re-export the auth hooks from auth-context
 export { useAuthContext as useAuth } from '../auth-context';
 
 // Also re-export the other hooks for convenience
