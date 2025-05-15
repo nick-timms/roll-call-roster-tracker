@@ -18,12 +18,13 @@ interface ProtectedRouteProps {
  * Prevents unauthorized access to protected pages
  */
 const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
-  const { user, session, isLoading, recoverDatabaseConnection } = useAuth();
+  const { user, session, isLoading, status, recoverDatabaseConnection } = useAuth();
   const { toast } = useToast();
   const location = useLocation();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [shouldRedirect, setShouldRedirect] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [checkCounter, setCheckCounter] = useState(0);
   
   // Check authentication when the component mounts
   useEffect(() => {
@@ -34,38 +35,49 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
           userExists: !!user,
           sessionExists: !!session,
           isLoading,
+          authStatus: status,
           path: location.pathname,
-          requireAdmin
+          requireAdmin,
+          checkCounter
         });
         
         // If authentication is still loading, wait
-        if (isLoading) {
+        if (isLoading && checkCounter < 3) {
+          console.log("Protected route: Auth is still loading, waiting...");
+          setCheckCounter(prev => prev + 1);
           return;
         }
         
         // First check: do we have a user and session?
-        if (!user || !session) {
+        if (!user || !session || status !== AuthStatus.AUTHENTICATED) {
           console.log("Protected route: No authenticated user or session found");
           
-          // Try to double-check with Supabase directly
-          const { data: { session: directSession } } = await supabase.auth.getSession();
-          
-          if (!directSession?.user) {
-            console.log("Protected route: No authenticated user found, redirecting to login");
+          if (checkCounter >= 3) {
+            // After 3 attempts, try direct Supabase check
+            console.log("Protected route: Multiple attempts failed, checking with Supabase directly");
+            // Try to double-check with Supabase directly
+            const { data: { session: directSession } } = await supabase.auth.getSession();
             
-            toast({
-              title: "Authentication Required",
-              description: "Please log in to continue",
-              variant: "destructive",
-            });
+            if (!directSession?.user) {
+              console.log("Protected route: No authenticated user found, redirecting to login");
+              
+              toast({
+                title: "Authentication Required",
+                description: "Please log in to continue",
+                variant: "destructive",
+              });
+              
+              setShouldRedirect(true);
+              setIsCheckingAuth(false);
+              return;
+            }
             
-            setShouldRedirect(true);
-            setIsCheckingAuth(false);
+            // We found a valid session directly from Supabase
+            console.log("Protected route: Found valid session directly from Supabase");
+          } else {
+            setCheckCounter(prev => prev + 1);
             return;
           }
-          
-          // We found a valid session directly from Supabase
-          console.log("Protected route: Found valid session directly from Supabase");
         }
         
         // Second check (if needed): is this a protected admin route?
@@ -133,14 +145,14 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
     checkAuth();
     
     return () => clearTimeout(timeoutId);
-  }, [isLoading, user, session, recoverDatabaseConnection, location.pathname, requireAdmin, toast]);
+  }, [isLoading, user, session, recoverDatabaseConnection, location.pathname, requireAdmin, toast, status, checkCounter]);
   
   // Show loading state while checking auth
   if (isLoading || isCheckingAuth) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-        <span className="ml-3 text-gray-600">Verifying authentication...</span>
+        <span className="ml-3 text-gray-600">Verifying authentication... {checkCounter > 0 ? `(Attempt ${checkCounter})` : ''}</span>
       </div>
     );
   }

@@ -93,6 +93,7 @@ export const useAuthState = () => {
         }
         
         setUserAndSession(session?.user ?? null, session);
+        console.log("useAuthState: Initial session loaded", { hasSession: !!session });
       } catch (error) {
         console.error("useAuthState: Exception getting initial session:", error);
         setUserAndSession(null, null);

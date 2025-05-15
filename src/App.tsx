@@ -39,12 +39,17 @@ const App = () => (
         <ToastProvider>
           <AuthProvider>
             <Routes>
+              {/* Index route - handles initial auth check and redirect */}
               <Route index element={<Index />} />
+              
+              {/* Auth routes - accessible without authentication */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+              
+              {/* Layout routes - all protected within the layout */}
               <Route path="/" element={<Layout />}>
-                <Route index element={<Index />} />
+                <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route
                   path="/dashboard"
                   element={

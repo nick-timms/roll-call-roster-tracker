@@ -6,7 +6,7 @@ import { AuthStatus } from '@/hooks/auth/types';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, session, isLoading } = useAuth();
+  const { user, session, isLoading, status } = useAuth();
   const [redirectAttempted, setRedirectAttempted] = useState(false);
   
   useEffect(() => {
@@ -14,6 +14,7 @@ const Index = () => {
       hasUser: !!user, 
       hasSession: !!session,
       isLoading,
+      authStatus: status,
       redirectAttempted
     });
     
@@ -30,12 +31,13 @@ const Index = () => {
     if (!isLoading && !redirectAttempted) {
       console.log("Index page: Auth state determined", { 
         hasUser: !!user, 
-        hasSession: !!session
+        hasSession: !!session,
+        authStatus: status
       });
       
       setRedirectAttempted(true); // Mark that we've attempted a redirect
       
-      if (user && session) {
+      if (status === AuthStatus.AUTHENTICATED) {
         console.log("Index page: Redirecting to dashboard");
         navigate('/dashboard', { replace: true });
       } else {
@@ -45,7 +47,7 @@ const Index = () => {
     }
     
     return () => clearTimeout(timeoutId);
-  }, [user, session, navigate, isLoading, redirectAttempted]);
+  }, [user, session, navigate, isLoading, status, redirectAttempted]);
   
   // Return a loading indicator while auth state is being determined
   return (

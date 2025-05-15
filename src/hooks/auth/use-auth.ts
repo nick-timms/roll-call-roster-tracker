@@ -1,12 +1,8 @@
 
+// This file ensures the proper export structure for the auth hooks
 import { useAuthContext } from './auth-context';
 
+// Re-export the hook with the same name as what components expect
 export const useAuth = () => {
-  const context = useAuthContext();
-  
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  
-  return context;
+  return useAuthContext();
 };

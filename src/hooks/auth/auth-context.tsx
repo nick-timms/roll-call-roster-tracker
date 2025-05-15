@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContextType, AuthStatus, AuthError } from './types';
@@ -255,19 +254,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (user && session) return AuthStatus.AUTHENTICATED;
     return AuthStatus.UNAUTHENTICATED;
   }, [isInitialized, user, session, error]);
-
-  // Set up session refresh timer
-  // useEffect(() => {
-  //   if (!session) return;
-    
-  //   // Refresh token every 5 minutes to ensure it stays valid
-  //   const refreshTimer = setInterval(async () => {
-  //     console.log("Scheduled token refresh attempt");
-  //     await refreshSession();
-  //   }, 5 * 60 * 1000); // 5 minutes
-    
-  //   return () => clearInterval(refreshTimer);
-  // }, [session, refreshSession]);
 
   // Create context value
   const contextValue = useMemo(() => ({
