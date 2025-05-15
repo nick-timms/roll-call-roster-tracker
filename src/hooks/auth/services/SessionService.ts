@@ -42,26 +42,46 @@ export class SessionService {
   static async refreshSession() {
     try {
       console.log("SessionService: Attempting to refresh session");
-      const result = await refreshSession();
+      const refreshResult = await refreshSession();
       
-      // The refreshSession function actually returns an object with data and error, not a boolean
-      if (result.error) {
-        console.error("SessionService: Error refreshing session:", result.error);
-        return { success: false, session: null };
+      // Handle the refreshResult based on its actual return type
+      if (typeof refreshResult === 'boolean') {
+        // If refreshSession returns a boolean (success indicator)
+        if (!refreshResult) {
+          console.error("SessionService: Session refresh failed");
+          return { success: false, session: null };
+        }
+        
+        // If refresh was successful but we don't have session details,
+        // we'll need to fetch the current session
+        const { session } = await this.getCurrentSession();
+        console.log("SessionService: Session refresh successful, retrieved session");
+        
+        return {
+          success: true,
+          session,
+        };
+      } else {
+        // If refreshSession returns an object with data and error properties
+        if (refreshResult.error) {
+          console.error("SessionService: Error refreshing session:", refreshResult.error);
+          return { success: false, session: null };
+        }
+        
+        const session = refreshResult.data?.session;
+        console.log(`SessionService: Session refresh successful: ${!!session}`);
+        
+        // Log updated token expiry
+        if (session?.expires_at) {
+          const expiresAt = new Date(session.expires_at * 1000).toISOString();
+          console.log("SessionService: New token expires at:", expiresAt);
+        }
+        
+        return {
+          success: true,
+          session,
+        };
       }
-      
-      console.log(`SessionService: Session refresh successful: ${!!result.data.session}`);
-      
-      // Log updated token expiry
-      if (result.data.session?.expires_at) {
-        const expiresAt = new Date(result.data.session.expires_at * 1000).toISOString();
-        console.log("SessionService: New token expires at:", expiresAt);
-      }
-      
-      return {
-        success: true,
-        session: result.data.session,
-      };
     } catch (error: any) {
       console.error("SessionService: Exception refreshing session:", error);
       return { success: false, session: null };
